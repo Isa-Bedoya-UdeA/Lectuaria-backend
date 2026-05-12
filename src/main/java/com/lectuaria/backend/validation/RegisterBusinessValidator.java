@@ -11,14 +11,14 @@ import java.util.List;
 @Component
 public class RegisterBusinessValidator {
 
-    private static final String PASSWORD_REGEX = "^(?=.*[A-Z])(?=.*\\d).{8,}$";
+    private static final String PASSWORD_REGEX = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%&*#]).{12,}$";
 
     public List<String> validate(RegisterRequestDTO request) {
         List<String> errors = new ArrayList<>();
 
         // Validación de contraseña
         if (request.getPassword() != null && !request.getPassword().matches(PASSWORD_REGEX)) {
-            errors.add("La contraseña debe tener mínimo 8 caracteres, una mayúscula y un número.");
+            errors.add("La contraseña debe tener mínimo 12 caracteres, una mayúscula, una minúscula, un número y un carácter especial (@$!%&*#).");
         }
 
         if (request.getPassword() != null && !request.getPassword().equals(request.getConfirmPassword())) {

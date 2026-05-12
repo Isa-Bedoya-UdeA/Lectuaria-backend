@@ -5,6 +5,7 @@ import com.lectuaria.backend.dto.auth.LoginResponseDTO;
 import com.lectuaria.backend.dto.auth.RegisterRequestDTO;
 import com.lectuaria.backend.dto.auth.RegisterResponseDTO;
 import java.util.Objects;
+import com.lectuaria.backend.exception.UnauthorizedException;
 import com.lectuaria.backend.exception.ValidationException;
 import com.lectuaria.backend.service.auth.IAuthService;
 import com.lectuaria.backend.security.JwtService;
@@ -118,8 +119,9 @@ class AuthControllerTest {
 
   @Test
   void denyProtectedRouteWithoutSession() throws Exception {
-    // Mock JwtService para evitar errores de 500
-    when(jwtService.extractEmail(any())).thenThrow(new RuntimeException("Invalid token"));
+    // Mock JwtService para lanzar UnauthorizedException como lo hace el controller
+    when(jwtService.isValid(anyString())).thenReturn(false);
+    when(jwtService.extractEmail(any())).thenThrow(new UnauthorizedException("Token inválido"));
     
     // Este test no depende de AuthService porque extractEmail lanza excepción antes
     mockMvc.perform(get("/api/auth/me"))

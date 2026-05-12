@@ -10,10 +10,12 @@ import com.lectuaria.backend.repository.auth.UserRepository;
 import com.lectuaria.backend.security.JwtService;
 import com.lectuaria.backend.service.book.IBookRatingService;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mock;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
@@ -40,8 +42,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ActiveProfiles("test")
 @TestPropertySource(properties = {
     "spring.security.enabled=false",
-    "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration,org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration"
+    "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration,org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration,org.springframework.boot.autoconfigure.security.servlet.SecurityFilterAutoConfiguration"
 })
+@Import(com.lectuaria.backend.config.TestSecurityConfigForBookRating.class)
 class BookRatingControllerTest {
 
         @Autowired
@@ -61,8 +64,8 @@ class BookRatingControllerTest {
                 String token = "valid-token";
                 User user = buildUser();
 
-                when(jwtService.isValid(anyString())).thenReturn(true);
-                when(jwtService.extractEmail(anyString())).thenReturn("user@example.com");
+                when(jwtService.isValid(token)).thenReturn(true);
+                when(jwtService.extractEmail(token)).thenReturn("user@example.com");
                 when(userRepository.findByEmail("user@example.com")).thenReturn(Optional.of(user));
                 when(bookRatingService.rateBook(eq(10L), eq(Objects.requireNonNull(user)),
                                 eq(Objects.requireNonNull(new BigDecimal("4.5")))))
