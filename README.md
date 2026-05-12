@@ -16,7 +16,6 @@ Backend de Lectuaria construido con Java 17 + Spring Boot 3.
 
 - Java 17+
 - Maven 3.5+
-- PostgreSQL 12+
 
 ### Configuración Inicial
 
@@ -74,7 +73,13 @@ El servidor estará disponible en `http://localhost:3000`
 │   │   ├── controller/
 │   │   │   ├── auth/
 │   │   │   ├── books/
+│   │   │   ├── friendship/
+│   │   │   ├── home/
 │   │   │   ├── library/
+│   │   │   ├── list/
+│   │   │   ├── notification/
+│   │   │   ├── shared/
+│   │   │   ├── user/
 │   │   │   └── zones/
 │   │   ├── dto/
 │   │   ├── exception/
