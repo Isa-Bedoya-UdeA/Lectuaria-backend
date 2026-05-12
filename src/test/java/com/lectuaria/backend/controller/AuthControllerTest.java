@@ -115,12 +115,15 @@ class AuthControllerTest {
 
   @Test
   void denyProtectedRouteWithoutSession() throws Exception {
+    String token = "invalid-token";
+    
     // Mock JwtService para lanzar UnauthorizedException como lo hace el controller
-    when(jwtService.isValid(anyString())).thenReturn(false);
-    when(jwtService.extractEmail(anyString())).thenThrow(new UnauthorizedException("Token inválido"));
+    when(jwtService.isValid(token)).thenReturn(false);
+    when(jwtService.extractEmail(token)).thenThrow(new UnauthorizedException("Token inválido"));
     
     // Este test no depende de AuthService porque extractEmail lanza excepción antes
-    mockMvc.perform(get("/api/auth/me"))
+    mockMvc.perform(get("/api/auth/me")
+        .header("Authorization", "Bearer " + token))
         .andExpect(status().isUnauthorized());
   }
 
