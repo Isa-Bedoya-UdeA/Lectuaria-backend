@@ -21,7 +21,8 @@ public class ISBNValidator {
         }
 
         // Regla 1: No debe contener letras (excepto x/X)
-        if (isbn.matches(".*[a-wyz].*i")) {
+        // Using character class to avoid ReDoS vulnerability
+        if (isbn.toLowerCase().matches("[a-wyz]")) {
             return false;
         }
 
@@ -49,7 +50,8 @@ public class ISBNValidator {
         }
 
         // Verifica si contiene letras (excepto x/X)
-        if (isbn.matches(".*[a-wyz].*i")) {
+        // Using character class to avoid ReDoS vulnerability
+        if (isbn.toLowerCase().matches("[a-wyz]")) {
             return "Formato de ISBN incorrecto. No debe contener letras.";
         }
 
