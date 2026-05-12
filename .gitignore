@@ -1,0 +1,60 @@
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Dependencies
+/target/
+*.jar
+*.jar!
+*.war
+*.rar
+*.egg-info/
+dist-*
+.python-version
+node_modules/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+.desktop
+
+# Build output
+/out/
+/build/
+*.class
+*.log
+*.ctxt
+.mtj.tmp/
+
+# Maven
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+.flattened-pom.xml
+%regex[(?i)(.*/)??SCCS(/.*)?]
+%regex[(?i)(.*/)??RCS(/.*)?]
+%regex[(?i)(.*/)??CVS(/.*)?]
+%regex[(?i)(.*/)??CVSROOT(/.*)?]
+%regex[(?i)(.*/)??\.svn(/.*)?]
+%regex[(?i)(.*/)??\.hg(/.*)?]
+%regex[(?i)(.*/)??\.bzr(/.*)?]
+
+# Others
+*.orig
