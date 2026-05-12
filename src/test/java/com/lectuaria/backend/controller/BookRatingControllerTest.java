@@ -1,5 +1,6 @@
 package com.lectuaria.backend.controller;
 
+import com.lectuaria.backend.controller.books.BookRatingController;
 import com.lectuaria.backend.dto.book.BookRatingResponseDTO;
 import com.lectuaria.backend.dto.book.BookReviewResponseDTO;
 import com.lectuaria.backend.dto.common.PaginatedResponse;
@@ -24,6 +25,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Objects;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -37,7 +40,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ActiveProfiles("test")
 @TestPropertySource(properties = {
     "spring.security.enabled=false",
-    "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration"
+    "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration,org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration"
 })
 class BookRatingControllerTest {
 
@@ -58,8 +61,8 @@ class BookRatingControllerTest {
                 String token = "valid-token";
                 User user = buildUser();
 
-                when(jwtService.isValid(token)).thenReturn(true);
-                when(jwtService.extractEmail(token)).thenReturn("user@example.com");
+                when(jwtService.isValid(anyString())).thenReturn(true);
+                when(jwtService.extractEmail(anyString())).thenReturn("user@example.com");
                 when(userRepository.findByEmail("user@example.com")).thenReturn(Optional.of(user));
                 when(bookRatingService.rateBook(eq(10L), eq(Objects.requireNonNull(user)),
                                 eq(Objects.requireNonNull(new BigDecimal("4.5")))))

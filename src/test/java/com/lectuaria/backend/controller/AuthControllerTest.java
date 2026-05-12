@@ -7,6 +7,7 @@ import com.lectuaria.backend.dto.auth.RegisterResponseDTO;
 import java.util.Objects;
 import com.lectuaria.backend.exception.ValidationException;
 import com.lectuaria.backend.service.auth.IAuthService;
+import com.lectuaria.backend.security.JwtService;
 
 import jakarta.servlet.http.Cookie;
 
@@ -42,10 +43,9 @@ class AuthControllerTest {
 
   @MockBean
   private IAuthService authService;
-  // JwtService no se usa directamente en el controller para los endpoints
-  // probados,
-  // pero si lo necesitas para extractEmail, también puedes mockearlo:
-  // @MockBean private JwtService jwtService;
+  
+  @MockBean
+  private JwtService jwtService;
 
   private static final String JSON_PATH_ACCESS_TOKEN = "$.accessToken";
   private static final String JSON_PATH_REFRESH_TOKEN = "$.refreshToken";
@@ -118,6 +118,9 @@ class AuthControllerTest {
 
   @Test
   void denyProtectedRouteWithoutSession() throws Exception {
+    // Mock JwtService para evitar errores de 500
+    when(jwtService.extractEmail(any())).thenThrow(new RuntimeException("Invalid token"));
+    
     // Este test no depende de AuthService porque extractEmail lanza excepción antes
     mockMvc.perform(get("/api/auth/me"))
         .andExpect(status().isUnauthorized());

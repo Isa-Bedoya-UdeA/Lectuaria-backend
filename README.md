@@ -2,12 +2,20 @@
 
 Backend de Lectuaria construido con Java 17 + Spring Boot 3.
 
+[![CI/CD Pipeline](https://github.com/Isa-Bedoya-UdeA/Lectuaria-backend/actions/workflows/build.yml/badge.svg)](https://github.com/Isa-Bedoya-UdeA/Lectuaria-backend/actions/workflows/build.yml)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=Isa-Bedoya-UdeA_Lectuaria-backend&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=Isa-Bedoya-UdeA_Lectuaria-backend)
+[![Bugs](https://sonarcloud.io/api/project_badges/measure?project=Isa-Bedoya-UdeA_Lectuaria-backend&metric=bugs)](https://sonarcloud.io/summary/new_code?id=Isa-Bedoya-UdeA_Lectuaria-backend)
+[![Code Smells](https://sonarcloud.io/api/project_badges/measure?project=Isa-Bedoya-UdeA_Lectuaria-backend&metric=code_smells)](https://sonarcloud.io/summary/new_code?id=Isa-Bedoya-UdeA_Lectuaria-backend)
+[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=Isa-Bedoya-UdeA_Lectuaria-backend&metric=coverage)](https://sonarcloud.io/summary/new_code?id=Isa-Bedoya-UdeA_Lectuaria-backend)
+[![Lines of Code](https://sonarcloud.io/api/project_badges/measure?project=Isa-Bedoya-UdeA_Lectuaria-backend&metric=ncloc)](https://sonarcloud.io/summary/new_code?id=Isa-Bedoya-UdeA_Lectuaria-backend)
+[![Technical Debt](https://sonarcloud.io/api/project_badges/measure?project=Isa-Bedoya-UdeA_Lectuaria-backend&metric=sqale_index)](https://sonarcloud.io/summary/new_code?id=Isa-Bedoya-UdeA_Lectuaria-backend)
+
 ## Configuración del Entorno
 
 ### Requisitos Previos
 
 - Java 17+
-- Maven 3.8+
+- Maven 3.5+
 - PostgreSQL 12+
 
 ### Configuración Inicial
