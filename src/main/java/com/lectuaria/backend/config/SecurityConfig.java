@@ -54,6 +54,8 @@ public class SecurityConfig {
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/books/genre/**").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/books/genres").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/books/author/**").permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/books/featured").permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/books/*/similar").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/books").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/books/*").permitAll()
 

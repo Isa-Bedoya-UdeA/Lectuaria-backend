@@ -90,7 +90,8 @@ public class BookServiceImpl implements IBookService {
         return toPaginatedResponseFromBooks(bookPage, this::toSummaryDTO);
     }
 
-    public PaginatedResponse<BookSummaryDTO> getAllBooks(int page, int size, Float minRating, Integer startYear, Integer endYear, List<String> formatTypes, Long userId) {
+    public PaginatedResponse<BookSummaryDTO> getAllBooks(int page, int size, Float minRating, Integer startYear,
+            Integer endYear, List<String> formatTypes, Long userId) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("title").ascending());
 
         Specification<Book> spec = Specification.where(null);
@@ -197,11 +198,13 @@ public class BookServiceImpl implements IBookService {
         return toPaginatedResponseFromBooks(bookPage, this::toSummaryDTO);
     }
 
-    public PaginatedResponse<BookCatalogItemDTO> getNewCatalogBooks(int page, int size, Long genreId, String formatName) {
+    public PaginatedResponse<BookCatalogItemDTO> getNewCatalogBooks(int page, int size, Long genreId,
+            String formatName) {
         Pageable pageable = PageRequest.of(page, size);
         Instant since = Instant.now().minus(java.time.Duration.ofDays(30));
         Page<Book> bookPage = bookRepository.findNewCatalogBooks(since, genreId, normalizeBlank(formatName), pageable);
-        return toPaginatedResponseFromBooks(bookPage, book -> new BookCatalogItemDTO(toSummaryDTO(book), book.getCreatedAt()));
+        return toPaginatedResponseFromBooks(bookPage,
+                book -> new BookCatalogItemDTO(toSummaryDTO(book), book.getCreatedAt()));
     }
 
     public FeaturedSectionsDTO getFeaturedSections() {
@@ -210,21 +213,16 @@ public class BookServiceImpl implements IBookService {
                 .with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
                 .atStartOfDay().toInstant(ZoneOffset.UTC);
 
-        List<BookSummaryDTO> mostRead = listToSummary(listBookRepository.findMostAddedToListSince("Leídos", monthStart, PageRequest.of(0, 10)));
-        if (mostRead.size() < 10) {
-            mostRead = listToSummary(bookRepository.findMostPopular(PageRequest.of(0, 10)).getContent());
-        }
+        List<BookSummaryDTO> mostRead = listToSummary(
+                listBookRepository.findMostAddedToListSince("Leídos", monthStart, PageRequest.of(0, 10)));
 
-        List<BookSummaryDTO> topRated = listToSummary(bookRepository.findQualifiedTopRated(null, null, PageRequest.of(0, 10)).getContent());
-        List<BookSummaryDTO> trending = listToSummary(listBookRepository.findTrendingBooksSince(weekStart, PageRequest.of(0, 10)));
-        if (trending.size() < 10) {
-            trending = listToSummary(bookRepository.findMostPopular(PageRequest.of(0, 10)).getContent());
-        }
+        List<BookSummaryDTO> topRated = listToSummary(
+                bookRepository.findQualifiedTopRated(null, null, PageRequest.of(0, 10)).getContent());
 
         Instant nextUpdateAt = LocalDate.now(ZoneOffset.UTC)
                 .with(TemporalAdjusters.next(DayOfWeek.MONDAY))
                 .atStartOfDay().toInstant(ZoneOffset.UTC);
-        return new FeaturedSectionsDTO(mostRead, topRated, trending, nextUpdateAt);
+        return new FeaturedSectionsDTO(mostRead, topRated, nextUpdateAt);
     }
 
     public List<BookSummaryDTO> getSimilarBooks(Long bookId) {
@@ -286,15 +284,16 @@ public class BookServiceImpl implements IBookService {
         });
     }
 
-    public PaginatedResponse<BookSummaryDTO> searchBooksByKeywordsAndLibraries(List<String> keywords, List<Long> libraryIds, int page, int size) {
+    public PaginatedResponse<BookSummaryDTO> searchBooksByKeywordsAndLibraries(List<String> keywords,
+            List<Long> libraryIds, int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
 
         Specification<Book> spec = Specification.where(null);
-        
+
         if (keywords != null && !keywords.isEmpty()) {
             spec = spec.and(BookSpecifications.containsKeywords(keywords));
         }
-        
+
         if (libraryIds != null && !libraryIds.isEmpty()) {
             spec = spec.and(BookSpecifications.inLibraries(libraryIds));
         }
@@ -344,7 +343,8 @@ public class BookServiceImpl implements IBookService {
             entityManager.flush(); // Asegurar que el cambio se persista
         }
 
-        // Si no hay más bibliotecas que tengan este libro, eliminarlo completamente de la DB
+        // Si no hay más bibliotecas que tengan este libro, eliminarlo completamente de
+        // la DB
         long libraryBooksCount = libraryBookRepository.countByBookId(bookId);
         if (libraryBooksCount == 0) {
             bookRepository.deleteById(bookId);
@@ -409,7 +409,8 @@ public class BookServiceImpl implements IBookService {
         if (request.getGenres() != null) {
             List<Genre> genres = request.getGenres().stream()
                     .map(name -> genreRepository.findByName(name.trim())
-                            .orElseThrow(() -> new RuntimeException("El género '" + name + "' no existe en la plataforma. Por favor, usa solo los géneros permitidos.")))
+                            .orElseThrow(() -> new RuntimeException("El género '" + name
+                                    + "' no existe en la plataforma. Por favor, usa solo los géneros permitidos.")))
                     .collect(Collectors.toList());
             book.setGenres(genres);
         }
@@ -432,7 +433,8 @@ public class BookServiceImpl implements IBookService {
         // Actualizar disponibilidad en la biblioteca del usuario si es bibliotecario
         Librarian librarian = librarianRepository.findByUserId(userId).orElse(null);
         if (librarian != null && request.getAvailability() != null) {
-            Optional<LibraryBook> lbOpt = libraryBookRepository.findByLibraryIdAndBookId(librarian.getLibrary().getId(), book.getId());
+            Optional<LibraryBook> lbOpt = libraryBookRepository.findByLibraryIdAndBookId(librarian.getLibrary().getId(),
+                    book.getId());
             if (lbOpt.isPresent()) {
                 LibraryBook lb = lbOpt.get();
                 lb.setPhysicalCopies(request.getAvailability().getPhysicalCopies());
@@ -455,7 +457,7 @@ public class BookServiceImpl implements IBookService {
                         .map(g -> new GenreDTO(g.getId(), g.getName(), g.getDescription()))
                         .collect(Collectors.toList())
                 : List.of();
-        
+
         BookSummaryDTO dto = new BookSummaryDTO(
                 book.getId(),
                 book.getIsbn(),
@@ -466,7 +468,7 @@ public class BookServiceImpl implements IBookService {
                 book.getRatingsCount() != null ? book.getRatingsCount() : 0,
                 book.getCoverUrl(),
                 null, null, book.getCreatedBy() != null ? book.getCreatedBy().getId() : null);
-        
+
         if (book.getLibraryBooks() != null) {
             List<String> libNames = book.getLibraryBooks().stream()
                     .map(lb -> lb.getLibrary().getName())
@@ -474,7 +476,7 @@ public class BookServiceImpl implements IBookService {
                     .collect(Collectors.toList());
             dto.setAvailableLibraries(libNames);
         }
-        
+
         return dto;
     }
 
@@ -531,7 +533,8 @@ public class BookServiceImpl implements IBookService {
                 formatNames);
 
         if (book.getLibraryBooks() != null) {
-            List<com.lectuaria.backend.dto.library.LibraryAvailabilityDTO> availabilityList = book.getLibraryBooks().stream()
+            List<com.lectuaria.backend.dto.library.LibraryAvailabilityDTO> availabilityList = book.getLibraryBooks()
+                    .stream()
                     .map(lb -> new com.lectuaria.backend.dto.library.LibraryAvailabilityDTO(
                             new com.lectuaria.backend.dto.library.LibrarySummaryDTO(
                                     lb.getLibrary().getId(),
@@ -541,13 +544,11 @@ public class BookServiceImpl implements IBookService {
                                     lb.getLibrary().getContactEmail(),
                                     lb.getLibrary().getContactPhone(),
                                     lb.getLibrary().getOpeningHours(),
-                                    null
-                            ),
+                                    null),
                             lb.getPhysicalCopies() != null && lb.getPhysicalCopies() > 0,
                             lb.getPhysicalCopies(),
                             lb.getDigitalAvailable() != null && lb.getDigitalAvailable(),
-                            lb.getDigitalPlatform()
-                    ))
+                            lb.getDigitalPlatform()))
                     .collect(Collectors.toList());
             dto.setAvailability(availabilityList);
         }
@@ -604,16 +605,18 @@ public class BookServiceImpl implements IBookService {
     }
 
     @Transactional(readOnly = true)
-    public PaginatedResponse<BookSummaryDTO> getBooksByFormatAvailability(String formatType, int page, int size, Long userId) {
+    public PaginatedResponse<BookSummaryDTO> getBooksByFormatAvailability(String formatType, int page, int size,
+            Long userId) {
         Pageable pageable = PageRequest.of(page, size);
         Page<Book> bookPage = bookRepository.findByFormatAvailability(formatType, pageable);
         return toPaginatedResponseFromBooks(bookPage, this::toSummaryDTO);
     }
 
     @Transactional(readOnly = true)
-    public PaginatedResponse<BookSummaryDTO> searchBooksByMultipleFilters(BookFilterDTO filter, int page, int size, Long userId) {
+    public PaginatedResponse<BookSummaryDTO> searchBooksByMultipleFilters(BookFilterDTO filter, int page, int size,
+            Long userId) {
         Pageable pageable = PageRequest.of(page, size);
-        
+
         String keywords = null;
         if (filter.getKeywords() != null && !filter.getKeywords().isEmpty()) {
             keywords = String.join(" ", filter.getKeywords());
@@ -622,18 +625,18 @@ public class BookServiceImpl implements IBookService {
                 keywords = null;
             }
         }
-        
+
         // Convert empty lists to null for proper JPA query handling
-        List<Long> genreIds = (filter.getGenreIds() != null && !filter.getGenreIds().isEmpty()) 
-                ? filter.getGenreIds() 
+        List<Long> genreIds = (filter.getGenreIds() != null && !filter.getGenreIds().isEmpty())
+                ? filter.getGenreIds()
                 : null;
-        List<Long> libraryIds = (filter.getLibraryIds() != null && !filter.getLibraryIds().isEmpty()) 
-                ? filter.getLibraryIds() 
+        List<Long> libraryIds = (filter.getLibraryIds() != null && !filter.getLibraryIds().isEmpty())
+                ? filter.getLibraryIds()
                 : null;
-        List<String> formatTypes = (filter.getFormatTypes() != null && !filter.getFormatTypes().isEmpty()) 
-                ? filter.getFormatTypes() 
+        List<String> formatTypes = (filter.getFormatTypes() != null && !filter.getFormatTypes().isEmpty())
+                ? filter.getFormatTypes()
                 : null;
-        
+
         Page<Book> bookPage = bookRepository.searchBooksByMultipleFilters(
                 keywords,
                 genreIds,
@@ -642,9 +645,8 @@ public class BookServiceImpl implements IBookService {
                 filter.getMinYear(),
                 filter.getMaxYear(),
                 filter.getMinRating(),
-                pageable
-        );
-        
+                pageable);
+
         return toPaginatedResponseFromBooks(bookPage, this::toSummaryDTO);
     }
 }

@@ -21,9 +21,6 @@ public interface UserListBookRepository extends JpaRepository<UserListBook, Long
     @Query("SELECT ulb FROM UserListBook ulb WHERE ulb.userList.user.id IN :userIds ORDER BY ulb.addedAt DESC")
     List<UserListBook> findRecentByUserIds(@Param("userIds") List<Long> userIds, Pageable pageable);
 
-    @Query("SELECT ulb.book FROM UserListBook ulb WHERE ulb.addedAt >= :since GROUP BY ulb.book ORDER BY COUNT(ulb) DESC, MAX(ulb.addedAt) DESC")
-    List<com.lectuaria.backend.model.book.Book> findTrendingBooksSince(@Param("since") Instant since, Pageable pageable);
-
     @Query("SELECT ulb.book FROM UserListBook ulb WHERE ulb.userList.name = :listName AND ulb.addedAt >= :since GROUP BY ulb.book ORDER BY COUNT(ulb) DESC, MAX(ulb.addedAt) DESC")
     List<com.lectuaria.backend.model.book.Book> findMostAddedToListSince(@Param("listName") String listName, @Param("since") Instant since, Pageable pageable);
 
