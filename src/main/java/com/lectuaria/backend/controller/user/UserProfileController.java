@@ -1,5 +1,6 @@
 package com.lectuaria.backend.controller.user;
 
+import com.lectuaria.backend.dto.user.FriendActivityDTO;
 import com.lectuaria.backend.dto.user.UserProfileDTO;
 import com.lectuaria.backend.dto.user.UserStatsDTO;
 import com.lectuaria.backend.model.auth.User;
@@ -9,6 +10,8 @@ import com.lectuaria.backend.service.user.IUserProfileService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/users")
@@ -37,6 +40,15 @@ public class UserProfileController {
     @GetMapping("/{usernameSlug}/stats")
     public ResponseEntity<UserStatsDTO> getUserStats(@PathVariable String usernameSlug) {
         return ResponseEntity.ok(userProfileService.getUserStats(usernameSlug));
+    }
+
+    @GetMapping("/{usernameSlug}/activity")
+    public ResponseEntity<List<FriendActivityDTO>> getFriendActivity(
+            @PathVariable String usernameSlug,
+            HttpServletRequest request) {
+        User currentUser = tryExtractUser(request);
+        List<FriendActivityDTO> activities = userProfileService.getFriendActivity(usernameSlug, currentUser);
+        return ResponseEntity.ok(activities);
     }
 
     private User tryExtractUser(HttpServletRequest request) {

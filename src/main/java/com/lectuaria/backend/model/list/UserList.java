@@ -33,6 +33,9 @@ public class UserList {
     @Column(name = "visibility", nullable = false)
     private ListVisibility visibility = ListVisibility.LISTED;
 
+    @Column(name = "public_token")
+    private String publicToken;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;
@@ -54,8 +57,10 @@ public class UserList {
     public ListType getListType() { return listType; }
     public ListVisibility getVisibility() { return visibility; }
     public Instant getCreatedAt() { return createdAt; }
+    public String getPublicToken() { return publicToken; }
 
     public void setName(String name) { this.name = name; }
     public void setDescription(String description) { this.description = description; }
     public void setVisibility(ListVisibility visibility) { this.visibility = visibility; }
+    public void setPublicToken(String publicToken) { this.publicToken = publicToken; }
 }

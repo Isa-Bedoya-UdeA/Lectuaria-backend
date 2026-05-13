@@ -18,5 +18,9 @@ public interface UserListShareRepository extends JpaRepository<UserListShare, Lo
 
     Optional<UserListShare> findByListIdAndReceiverId(Long listId, Long receiverId);
 
+    Optional<UserListShare> findByListIdAndReceiverIdAndIsActiveTrue(Long listId, Long receiverId);
+
+    Optional<UserListShare> findByShareTokenAndIsActiveTrue(String shareToken);
+
     void deleteByListId(Long listId);
 }

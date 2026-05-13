@@ -29,6 +29,9 @@ public class Notification {
     @Column(name = "reference_id")
     private Long referenceId;
 
+    @Column(name = "share_token")
+    private String shareToken;
+
     @Column(name = "is_read", nullable = false)
     private boolean isRead = false;
 
@@ -50,6 +53,7 @@ public class Notification {
     public NotificationType getNotificationType() { return notificationType; }
     public String getMessage() { return message; }
     public Long getReferenceId() { return referenceId; }
+    public String getShareToken() { return shareToken; }
     public boolean isRead() { return isRead; }
     public Instant getCreatedAt() { return createdAt; }
 
@@ -57,5 +61,6 @@ public class Notification {
     public void setNotificationType(NotificationType notificationType) { this.notificationType = notificationType; }
     public void setMessage(String message) { this.message = message; }
     public void setReferenceId(Long referenceId) { this.referenceId = referenceId; }
+    public void setShareToken(String shareToken) { this.shareToken = shareToken; }
     public void setRead(boolean read) { isRead = read; }
 }

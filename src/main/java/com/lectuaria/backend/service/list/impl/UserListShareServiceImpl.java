@@ -14,14 +14,15 @@ import com.lectuaria.backend.model.list.ListVisibility;
 import com.lectuaria.backend.model.list.UserList;
 import com.lectuaria.backend.model.list.UserListShare;
 import com.lectuaria.backend.model.list.UserListShareLink;
+import com.lectuaria.backend.model.notification.Notification;
 import com.lectuaria.backend.model.notification.NotificationType;
 import com.lectuaria.backend.repository.auth.UserRepository;
 import com.lectuaria.backend.repository.list.UserListBookRepository;
 import com.lectuaria.backend.repository.list.UserListRepository;
 import com.lectuaria.backend.repository.list.UserListShareLinkRepository;
 import com.lectuaria.backend.repository.list.UserListShareRepository;
+import com.lectuaria.backend.repository.notification.NotificationRepository;
 import com.lectuaria.backend.service.list.IUserListShareService;
-import com.lectuaria.backend.service.notification.INotificationService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,15 +40,15 @@ public class UserListShareServiceImpl implements IUserListShareService {
     private final UserListRepository listRepository;
     private final UserRepository userRepository;
     private final UserListBookRepository listBookRepository;
-    private final INotificationService notificationService;
+    private final NotificationRepository notificationRepository;
 
-    public UserListShareServiceImpl(UserListShareRepository shareRepository, UserListShareLinkRepository linkRepository, UserListRepository listRepository, UserRepository userRepository, UserListBookRepository listBookRepository, INotificationService notificationService) {
+    public UserListShareServiceImpl(UserListShareRepository shareRepository, UserListShareLinkRepository linkRepository, UserListRepository listRepository, UserRepository userRepository, UserListBookRepository listBookRepository, NotificationRepository notificationRepository) {
         this.shareRepository = shareRepository;
         this.linkRepository = linkRepository;
         this.listRepository = listRepository;
         this.userRepository = userRepository;
         this.listBookRepository = listBookRepository;
-        this.notificationService = notificationService;
+        this.notificationRepository = notificationRepository;
     }
 
     @Override
@@ -78,6 +79,11 @@ public class UserListShareServiceImpl implements IUserListShareService {
             }
 
             UserListShare share = new UserListShare(list, list.getUser(), receiver);
+            // Generate unique token for LISTED lists
+            if (list.getVisibility() == ListVisibility.LISTED) {
+                String shareToken = generateUniqueToken();
+                share.setShareToken(shareToken);
+            }
             share = shareRepository.save(share);
 
             if (firstShare == null) {
@@ -86,6 +92,10 @@ public class UserListShareServiceImpl implements IUserListShareService {
         }
 
         return firstShare;
+    }
+
+    private String generateUniqueToken() {
+        return UUID.randomUUID().toString();
     }
 
     @Override
@@ -124,18 +134,29 @@ public class UserListShareServiceImpl implements IUserListShareService {
 
             try {
                 UserListShare share = new UserListShare(list, list.getUser(), receiver);
+                if (list.getVisibility() == ListVisibility.LISTED) {
+                    share.setShareToken(generateUniqueToken());
+                }
                 share = shareRepository.save(share);
 
                 String notificationMessage = message != null && !message.isEmpty()
                         ? list.getUser().getFullName() + " te ha compartido esta lista: " + list.getName() + " - " + message
                         : list.getUser().getFullName() + " te ha compartido esta lista: " + list.getName();
 
-                notificationService.createNotification(
-                        friendId,
-                        NotificationType.SHARED,
-                        notificationMessage,
-                        list.getId()
+                // Create notification with shareToken for LISTED lists
+                Notification notification = new Notification(
+                    userRepository.findById(friendId).orElseThrow(),
+                    NotificationType.SHARED,
+                    notificationMessage,
+                    list.getId()
                 );
+                
+                // Set shareToken for LISTED lists
+                if (list.getVisibility() == ListVisibility.LISTED) {
+                    notification.setShareToken(share.getShareToken());
+                }
+                
+                notificationRepository.save(notification);
                 successfulShares++;
             } catch (Exception e) {
                 failedShares++;
@@ -234,14 +255,19 @@ public class UserListShareServiceImpl implements IUserListShareService {
 
     @Override
     public UserListShareDTO getListByPublicToken(String token) {
-        UserListShareLink link = linkRepository.findByPublicTokenAndIsActiveTrue(token)
-                .orElseThrow(() -> new RuntimeException("Invalid or expired link"));
+        UserListShareLink link = linkRepository.findByPublicTokenAndIsActiveTrue(token).orElse(null);
+        
+        if (link != null) {
+            UserListShare share = new UserListShare();
+            share.setList(link.getList());
+            share.setOwner(link.getList().getUser());
+            share.setReceiver(null);
+            share.setActive(true);
+            return mapToDTO(share, true);
+        }
 
-        UserListShare share = new UserListShare();
-        share.setList(link.getList());
-        share.setOwner(link.getList().getUser());
-        share.setReceiver(null);
-        share.setActive(true);
+        UserListShare share = shareRepository.findByShareTokenAndIsActiveTrue(token)
+                .orElseThrow(() -> new RuntimeException("Invalid or expired link"));
 
         return mapToDTO(share, true);
     }
@@ -276,9 +302,13 @@ public class UserListShareServiceImpl implements IUserListShareService {
 
         String publicToken = null;
         if (share.getList() != null) {
-            UserListShareLink link = linkRepository.findByListId(share.getList().getId()).orElse(null);
-            if (link != null && link.isActive()) {
-                publicToken = link.getPublicToken();
+            if (share.getList().getVisibility() == ListVisibility.LISTED && share.getShareToken() != null) {
+                publicToken = share.getShareToken();
+            } else {
+                UserListShareLink link = linkRepository.findByListId(share.getList().getId()).orElse(null);
+                if (link != null && link.isActive()) {
+                    publicToken = link.getPublicToken();
+                }
             }
         }
 

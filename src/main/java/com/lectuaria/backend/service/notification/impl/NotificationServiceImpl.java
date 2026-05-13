@@ -119,6 +119,7 @@ public class NotificationServiceImpl implements INotificationService {
                 notification.getNotificationType(),
                 notification.getMessage(),
                 notification.getReferenceId(),
+                notification.getShareToken(),
                 notification.isRead(),
                 notification.getCreatedAt()
         );

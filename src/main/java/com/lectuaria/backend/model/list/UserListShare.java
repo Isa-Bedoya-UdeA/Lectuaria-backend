@@ -34,6 +34,9 @@ public class UserListShare {
     @Column(name = "is_active", nullable = false)
     private boolean isActive = true;
 
+    @Column(name = "share_token", unique = true)
+    private String shareToken;
+
     public UserListShare() {}
 
     public UserListShare(UserList list, User owner, User receiver) {
@@ -48,9 +51,11 @@ public class UserListShare {
     public User getReceiver() { return receiver; }
     public Instant getSharedAt() { return sharedAt; }
     public boolean isActive() { return isActive; }
+    public String getShareToken() { return shareToken; }
 
     public void setList(UserList list) { this.list = list; }
     public void setOwner(User owner) { this.owner = owner; }
     public void setReceiver(User receiver) { this.receiver = receiver; }
     public void setActive(boolean active) { isActive = active; }
+    public void setShareToken(String shareToken) { this.shareToken = shareToken; }
 }
