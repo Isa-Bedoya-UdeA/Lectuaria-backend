@@ -4,7 +4,7 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Size;
 
 public class ProfileUpdateRequestDTO {
-    // ===== Campos para usuarios NORMALES =====
+    // ===== Campos para usuarios LECTORES =====
     @Size(max = 50, message = "El nombre de usuario no puede exceder 50 caracteres")
     private String username;
 

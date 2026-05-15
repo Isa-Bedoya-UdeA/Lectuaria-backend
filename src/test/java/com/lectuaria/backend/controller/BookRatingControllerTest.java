@@ -56,7 +56,7 @@ class BookRatingControllerTest {
         private JwtService jwtService;
 
         @Test
-        @WithMockUser(username = "user@example.com", roles = {"NORMAL"})
+        @WithMockUser(username = "user@example.com", roles = {"READER"})
         void shouldSaveBookRatingSuccessfully() throws Exception {
                 String token = "valid-token";
                 User user = buildUser();
@@ -92,7 +92,7 @@ class BookRatingControllerTest {
         }
 
         @Test
-        @WithMockUser(username = "user@example.com", roles = {"NORMAL"})
+        @WithMockUser(username = "user@example.com", roles = {"READER"})
         void shouldRejectRatingOutsideRange() throws Exception {
                 String token = "valid-token";
 
@@ -111,7 +111,7 @@ class BookRatingControllerTest {
         }
 
         @Test
-        @WithMockUser(username = "user@example.com", roles = {"NORMAL"})
+        @WithMockUser(username = "user@example.com", roles = {"READER"})
         void shouldGetCurrentBookRating() throws Exception {
                 String token = "valid-token";
                 User user = buildUser();
@@ -140,7 +140,7 @@ class BookRatingControllerTest {
         }
 
         @Test
-        @WithMockUser(username = "user@example.com", roles = {"NORMAL"})
+        @WithMockUser(username = "user@example.com", roles = {"READER"})
         void shouldSavePublishedReviewSuccessfully() throws Exception {
                 String token = "valid-token";
                 User user = buildUser();
@@ -206,7 +206,7 @@ class BookRatingControllerTest {
                                 "Test User",
                                 "user@example.com",
                                 "hash",
-                                UserRole.NORMAL,
+                                UserRole.READER,
                                 "testuser",
                                 null,
                                 null);

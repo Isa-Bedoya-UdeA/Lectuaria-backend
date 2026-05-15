@@ -105,6 +105,12 @@ public class BulkUploadServiceImpl implements IBulkUploadService {
                     // Normalizar: quitar acentos de manera simple para comparaciones comunes
                     String formato = formatoRaw.replace("í", "i").replace("á", "a").replace("é", "e").replace("ó", "o").replace("ú", "u");
                     
+                    // Validar que el formato sea uno de los permitidos
+                    if (!formato.equals("digital") && !formato.equals("ambos") && !formato.equals("fisico")) {
+                        result.addError("Fila " + rowIndex + ": Formato inválido (\"" + formatoRaw + "\"). Los formatos permitidos son: físico, digital, ambos");
+                        continue;
+                    }
+                    
                     int physicalCount = 0;
                     
                     if (line.length > 10 && !line[10].trim().isEmpty()) {
@@ -123,7 +129,7 @@ public class BulkUploadServiceImpl implements IBulkUploadService {
                         availability.setPhysical(true);
                         availability.setPhysicalCopies(physicalCount > 0 ? physicalCount : 1);
                         availability.setDigital(true);
-                    } else { // default a físico
+                    } else { // fisico
                         availability.setPhysical(true);
                         availability.setPhysicalCopies(physicalCount > 0 ? physicalCount : 1);
                         availability.setDigital(false);

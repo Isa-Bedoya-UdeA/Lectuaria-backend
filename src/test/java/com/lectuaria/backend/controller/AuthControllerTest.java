@@ -53,7 +53,7 @@ class AuthControllerTest {
     // Mock para register
     RegisterResponseDTO mockRegisterResponse = new RegisterResponseDTO(
         "Cuenta creada correctamente. Revisa tu correo para confirmar tu cuenta.",
-        "normal");
+        "READER");
     when(authService.register(any(RegisterRequestDTO.class))).thenReturn(mockRegisterResponse);
 
     // Mock para login
@@ -72,14 +72,14 @@ class AuthControllerTest {
               "email": "ada@example.com",
               "password": "Password1",
               "confirmPassword": "Password1",
-              "userRole": "NORMAL",
+              "userRole": "READER",
               "username": "ada"
             }
             """))
         .andExpect(status().isCreated())
         .andExpect(
             jsonPath("$.message").value("Cuenta creada correctamente. Revisa tu correo para confirmar tu cuenta."))
-        .andExpect(jsonPath("$.userRole").value("normal"));
+        .andExpect(jsonPath("$.userRole").value("READER"));
 
     // 2. Verificar respuesta de LOGIN
     mockMvc.perform(post("/api/auth/login")

@@ -45,10 +45,10 @@ public class FriendshipServiceImpl implements IFriendshipService {
         List<User> users;
         if (currentUser != null) {
             // Authenticated: exclude self from results
-            users = userRepository.searchReaders(query.trim(), currentUser.getId(), UserRole.NORMAL);
+            users = userRepository.searchReaders(query.trim(), currentUser.getId(), UserRole.READER);
         } else {
             // Public: no userId exclusion
-            users = userRepository.searchReadersPublic(query.trim(), UserRole.NORMAL);
+            users = userRepository.searchReadersPublic(query.trim(), UserRole.READER);
         }
 
         return users.stream().map(u -> mapToDTO(u, currentUser)).collect(Collectors.toList());

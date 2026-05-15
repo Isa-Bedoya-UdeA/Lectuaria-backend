@@ -46,7 +46,7 @@ public class BookRatingController {
             @Valid @RequestBody @NonNull BookRatingRequestDTO request,
             HttpServletRequest httpRequest) {
         User user = extractUserFromRequest(httpRequest);
-        if (user.getRole() != UserRole.NORMAL) {
+        if (user.getRole() != UserRole.READER) {
             throw new UnauthorizedException("Solo los usuarios lectores pueden calificar libros");
         }
 
@@ -73,7 +73,7 @@ public class BookRatingController {
             @RequestBody @NonNull BookRatingRequestDTO ratingRequest,
             HttpServletRequest httpRequest) {
         User user = extractUserFromRequest(httpRequest);
-        if (user.getRole() != UserRole.NORMAL) {
+        if (user.getRole() != UserRole.READER) {
             throw new UnauthorizedException("Solo los usuarios lectores pueden actualizar calificaciones");
         }
 
@@ -87,7 +87,7 @@ public class BookRatingController {
             HttpServletRequest httpRequest) {
         User user = extractUserFromRequest(httpRequest);
 
-        if (user.getRole() != UserRole.NORMAL) {
+        if (user.getRole() != UserRole.READER) {
             throw new UnauthorizedException("Solo los usuarios lectores pueden eliminar calificaciones");
         }
 
@@ -102,7 +102,7 @@ public class BookRatingController {
             HttpServletRequest httpRequest) {
         User user = extractUserFromRequest(httpRequest);
 
-        if (user.getRole() != UserRole.NORMAL) {
+        if (user.getRole() != UserRole.READER) {
             throw new UnauthorizedException("Solo los usuarios lectores pueden escribir reseñas");
         }
 
@@ -133,7 +133,7 @@ public class BookRatingController {
             HttpServletRequest httpRequest) {
         User user = extractUserFromRequest(httpRequest);
 
-        if (user.getRole() != UserRole.NORMAL) {
+        if (user.getRole() != UserRole.READER) {
             throw new UnauthorizedException("Solo los usuarios lectores pueden editar reseñas");
         }
 
@@ -146,7 +146,7 @@ public class BookRatingController {
             HttpServletRequest httpRequest) {
         User user = extractUserFromRequest(httpRequest);
 
-        if (user.getRole() != UserRole.NORMAL && user.getRole() != UserRole.ADMIN) {
+        if (user.getRole() != UserRole.READER && user.getRole() != UserRole.ADMIN) {
             throw new UnauthorizedException("Solo los usuarios lectores pueden eliminar reseñas");
         }
 
@@ -160,7 +160,7 @@ public class BookRatingController {
             HttpServletRequest httpRequest) {
         User user = extractUserFromRequest(httpRequest);
 
-        if (user.getRole() != UserRole.NORMAL && user.getRole() != UserRole.ADMIN) {
+        if (user.getRole() != UserRole.READER && user.getRole() != UserRole.ADMIN) {
             throw new UnauthorizedException("Solo los usuarios lectores pueden eliminar calificaciones");
         }
 

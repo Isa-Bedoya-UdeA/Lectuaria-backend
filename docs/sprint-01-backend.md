@@ -4,7 +4,7 @@
 
 ### 1. Seguridad y Autenticación
 
-- Se estandarizó el uso de `UserRole` (incluye `ADMIN`, `NORMAL`, `LIBRARIAN`).
+- Se estandarizó el uso de `UserRole` (incluye `ADMIN`, `READER`, `LIBRARIAN`).
 - Registro con hash de contraseña (`BCryptPasswordEncoder`).
 - Login con emisión de JWT.
 - Logout con invalidación de refresh token.
@@ -14,7 +14,7 @@
 
 - Perfil autenticado (`GET /api/auth/me`).
 - Edición de perfil (`PUT /api/auth/me`) con validaciones de negocio.
-- Control de restricciones por rol (normal vs bibliotecario).
+- Control de restricciones por rol (reader vs bibliotecario).
 
 ### 3. Catálogo y Consulta de Libros
 

@@ -51,7 +51,6 @@ public class Book {
     private BigDecimal averageRating;
     @ManyToMany
     @JoinTable(name = "book_author", joinColumns = @JoinColumn(name = "id_book"), inverseJoinColumns = @JoinColumn(name = "id_author"))
-    @Basic
     private List<Author> authors;
 
     @ManyToMany

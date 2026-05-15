@@ -235,11 +235,11 @@ public class AuthServiceImpl implements IAuthService {
         if (user.getRole() == UserRole.LIBRARIAN) {
             return getLibrarianProfile(user);
         } else {
-            return getNormalUserProfile(user);
+            return getReaderProfile(user);
         }
     }
 
-    private ProfileResponseDTO getNormalUserProfile(User user) {
+    private ProfileResponseDTO getReaderProfile(User user) {
         return new ProfileResponseDTO(
                 user.getId(),
                 user.getEmail(),
@@ -292,11 +292,11 @@ public class AuthServiceImpl implements IAuthService {
         if (user.getRole() == UserRole.LIBRARIAN) {
             return updateLibrarianProfile(user, request);
         }
-        return updateNormalUserProfile(user, request);
+        return updateReaderProfile(user, request);
     }
 
     @SuppressWarnings("null")
-    private ProfileResponseDTO updateNormalUserProfile(User user, ProfileUpdateRequestDTO request) {
+    private ProfileResponseDTO updateReaderProfile(User user, ProfileUpdateRequestDTO request) {
         // Validar y actualizar username si se proporciona
         if (request.getUsername() != null && !request.getUsername().isBlank()) {
             if (userRepository.existsByUsernameIgnoreCaseAndEmailNot(request.getUsername(), user.getEmail())) {
@@ -315,7 +315,7 @@ public class AuthServiceImpl implements IAuthService {
         }
 
         userRepository.save(user);
-        return getNormalUserProfile(user);
+        return getReaderProfile(user);
     }
 
     @SuppressWarnings("null")

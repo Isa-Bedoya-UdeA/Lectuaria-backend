@@ -26,7 +26,7 @@ public class RegisterRequestDTO {
     @NotNull(message = "El rol de usuario es obligatorio.")
     private UserRole userRole;
 
-    // Para usuarios normales
+    // Para usuarios lectores
     private String username;
 
     // Para bibliotecarios (objeto anidado)

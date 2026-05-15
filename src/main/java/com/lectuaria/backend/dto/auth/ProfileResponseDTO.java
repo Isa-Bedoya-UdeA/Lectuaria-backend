@@ -11,7 +11,7 @@ public class ProfileResponseDTO {
     private final String biography;
 
     // ========== CAMPOS ESPECÍFICOS PARA BIBLIOTECARIOS ==========
-    // (Serán null para usuarios normales)
+    // (Serán null para usuarios lectores)
     private final String libraryName;
     private final String libraryAddress;
     private final String libraryContactEmail;
@@ -21,7 +21,7 @@ public class ProfileResponseDTO {
     private final String libraryZoneName;
     private Long libraryId;
 
-    // Constructor para usuarios NORMALES
+    // Constructor para usuarios LECTORES
     public ProfileResponseDTO(Long id, String email, String fullName, String userRole, String username,
             String photoUrl, String biography) {
         this.id = id;

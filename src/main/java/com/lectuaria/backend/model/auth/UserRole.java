@@ -1,7 +1,7 @@
 package com.lectuaria.backend.model.auth;
 
 public enum UserRole {
-    NORMAL,
+    READER,
     LIBRARIAN,
     ADMIN
 }

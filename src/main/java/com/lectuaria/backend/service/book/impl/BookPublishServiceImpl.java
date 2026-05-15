@@ -137,11 +137,21 @@ public class BookPublishServiceImpl implements IBookPublishService {
                 .collect(Collectors.toList());
         book.setAuthors(authors);
 
-        // Géneros: SOLO permitir géneros existentes
-        List<Genre> genres = request.getGenres().stream()
-                .map(name -> genreRepository.findByName(name.trim())
-                        .orElseThrow(() -> new RuntimeException("El género '" + name + "' no existe en la plataforma. Por favor, usa solo los géneros permitidos.")))
-                .collect(Collectors.toList());
+        // Géneros: SOLO permitir géneros existentes — recolectar todos los errores
+        List<String> genreErrors = new ArrayList<>();
+        List<Genre> genres = new ArrayList<>();
+        for (String name : request.getGenres()) {
+            Optional<Genre> genreOpt = genreRepository.findByName(name.trim());
+            if (genreOpt.isPresent()) {
+                genres.add(genreOpt.get());
+            } else {
+                genreErrors.add("el género '" + name + "' no existe en la plataforma");
+            }
+        }
+        if (!genreErrors.isEmpty()) {
+            throw new RuntimeException(
+                    "Géneros no válidos: " + String.join("; ", genreErrors) + ". Usa solo los géneros permitidos.");
+        }
         book.setGenres(genres);
 
         // Editoriales: buscar o crear

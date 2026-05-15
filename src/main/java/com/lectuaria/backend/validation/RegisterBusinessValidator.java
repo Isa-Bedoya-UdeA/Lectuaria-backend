@@ -11,23 +11,23 @@ import java.util.List;
 @Component
 public class RegisterBusinessValidator {
 
-    private static final String PASSWORD_REGEX = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%&*#]).{12,}$";
+    private static final String PASSWORD_REGEX = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).{8,}$";
 
     public List<String> validate(RegisterRequestDTO request) {
         List<String> errors = new ArrayList<>();
 
         // Validación de contraseña
         if (request.getPassword() != null && !request.getPassword().matches(PASSWORD_REGEX)) {
-            errors.add("La contraseña debe tener mínimo 12 caracteres, una mayúscula, una minúscula, un número y un carácter especial (@$!%&*#).");
+            errors.add("La contraseña debe tener mínimo 8 caracteres, una mayúscula, una minúscula y un número.");
         }
 
         if (request.getPassword() != null && !request.getPassword().equals(request.getConfirmPassword())) {
             errors.add("La confirmación de contraseña no coincide.");
         }
 
-        // Validación para usuarios normales
-        if (request.getUserRole() == UserRole.NORMAL && isBlank(request.getUsername())) {
-            errors.add("El nombre de usuario es obligatorio para usuarios normales.");
+        // Validación para usuarios lectores
+        if (request.getUserRole() == UserRole.READER && isBlank(request.getUsername())) {
+            errors.add("El nombre de usuario es obligatorio para usuarios lectores.");
         }
 
         // Validación para bibliotecarios
