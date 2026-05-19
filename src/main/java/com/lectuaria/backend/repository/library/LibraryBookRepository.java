@@ -9,6 +9,8 @@ import org.springframework.stereotype.Repository;
 
 import com.lectuaria.backend.model.book.LibraryBook;
 import java.util.Optional;
+import java.time.Instant;
+import java.util.List;
 
 @Repository
 public interface LibraryBookRepository extends JpaRepository<LibraryBook, Long> {
@@ -29,4 +31,27 @@ public interface LibraryBookRepository extends JpaRepository<LibraryBook, Long> 
 
     // Método para contar cuántas bibliotecas tienen un libro
     long countByBookId(Long bookId);
+
+    long countByLibraryId(Long libraryId);
+
+    long countByLibraryIdAndAddedAtGreaterThanEqual(Long libraryId, Instant from);
+
+    @Query("SELECT g.id, g.name, COUNT(lb) FROM LibraryBook lb JOIN lb.book.genres g " +
+            "WHERE lb.library.id = :libraryId GROUP BY g.id, g.name ORDER BY COUNT(lb) DESC, g.name ASC")
+    List<Object[]> findTopGenresByLibraryId(@Param("libraryId") Long libraryId, Pageable pageable);
+
+    @Query("SELECT COUNT(r) FROM BookReview r WHERE r.status = com.lectuaria.backend.model.book.ReviewStatus.published " +
+            "AND r.book.id IN (SELECT lb.book.id FROM LibraryBook lb WHERE lb.library.id = :libraryId)")
+    long countPublishedReviewsByLibraryId(@Param("libraryId") Long libraryId);
+
+    @Query("SELECT COALESCE(AVG(lb.book.averageRating), 0) FROM LibraryBook lb " +
+            "WHERE lb.library.id = :libraryId AND lb.book.averageRating IS NOT NULL")
+    java.math.BigDecimal calculateAverageRatingByLibraryId(@Param("libraryId") Long libraryId);
+
+    @Query("SELECT lb FROM LibraryBook lb WHERE lb.library.id = :libraryId " +
+            "ORDER BY COALESCE(lb.book.ratingsCount, 0) DESC, lb.book.title ASC")
+    List<LibraryBook> findMostPopularByLibraryId(@Param("libraryId") Long libraryId, Pageable pageable);
+
+    @Query("SELECT COUNT(r) FROM BookReview r WHERE r.book.id = :bookId AND r.status = com.lectuaria.backend.model.book.ReviewStatus.published")
+    long countPublishedReviewsByBookId(@Param("bookId") Long bookId);
 }

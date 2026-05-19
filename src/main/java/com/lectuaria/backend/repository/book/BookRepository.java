@@ -77,6 +77,13 @@ public interface BookRepository extends JpaRepository<Book, Long>, JpaSpecificat
 	@Query("SELECT DISTINCT b FROM Book b JOIN b.authors a WHERE a.id IN :authorIds AND b.id <> :bookId")
 	List<Book> findSimilarByAuthorIds(@Param("bookId") Long bookId, @Param("authorIds") List<Long> authorIds, Pageable pageable);
 
+	@Query("SELECT DISTINCT b FROM Book b JOIN b.genres g WHERE g.id IN :genreIds " +
+			"ORDER BY b.averageRating DESC, b.ratingsCount DESC, b.createdAt DESC")
+	List<Book> findRecommendationsByGenreIds(@Param("genreIds") List<Long> genreIds, Pageable pageable);
+
+	@Query("SELECT b FROM Book b ORDER BY b.averageRating DESC, b.ratingsCount DESC, b.createdAt DESC")
+	List<Book> findFallbackRecommendations(Pageable pageable);
+
 	// Verificar si existe por ISBN
 	boolean existsByIsbn(Long isbn);
 

@@ -25,6 +25,7 @@ public interface IBookRatingService {
     BookReviewResponseDTO saveReview(@NonNull Long bookId, @NonNull User user, @NonNull BookReviewUpsertRequestDTO request);
     BookReviewPreviewResponseDTO previewReview(@NonNull Long bookId, @NonNull BookReviewPreviewRequestDTO request);
     PaginatedResponse<BookReviewResponseDTO> getPublishedReviews(@NonNull Long bookId, int page, int size);
+    PaginatedResponse<BookReviewResponseDTO> getPublishedReviews(@NonNull Long bookId, int page, int size, String sort);
     BookReviewResponseDTO updateReview(@NonNull Long reviewId, @NonNull User user, @NonNull BookReviewUpsertRequestDTO request);
     void deleteReview(@NonNull Long reviewId, @NonNull User user);
     void refreshBookAggregates(Book book);

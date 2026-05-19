@@ -3,6 +3,7 @@ package com.lectuaria.backend.controller.user;
 import com.lectuaria.backend.dto.user.FriendActivityDTO;
 import com.lectuaria.backend.dto.user.UserProfileDTO;
 import com.lectuaria.backend.dto.user.UserStatsDTO;
+import com.lectuaria.backend.dto.statistics.ReadingStatisticsDTO;
 import com.lectuaria.backend.model.auth.User;
 import com.lectuaria.backend.repository.auth.UserRepository;
 import com.lectuaria.backend.security.JwtService;
@@ -40,6 +41,11 @@ public class UserProfileController {
     @GetMapping("/{usernameSlug}/stats")
     public ResponseEntity<UserStatsDTO> getUserStats(@PathVariable String usernameSlug) {
         return ResponseEntity.ok(userProfileService.getUserStats(usernameSlug));
+    }
+
+    @GetMapping("/{usernameSlug}/reading-statistics")
+    public ResponseEntity<ReadingStatisticsDTO> getReadingStatistics(@PathVariable String usernameSlug) {
+        return ResponseEntity.ok(userProfileService.getReadingStatistics(usernameSlug));
     }
 
     @GetMapping("/{usernameSlug}/activity")

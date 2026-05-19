@@ -122,8 +122,9 @@ public class BookRatingController {
     public ResponseEntity<PaginatedResponse<BookReviewResponseDTO>> getPublishedReviews(
             @PathVariable @NonNull Long bookId,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "5") int size) {
-        return ResponseEntity.ok(bookRatingService.getPublishedReviews(bookId, page, size));
+            @RequestParam(defaultValue = "5") int size,
+            @RequestParam(defaultValue = "MOST_RECENT") String sort) {
+        return ResponseEntity.ok(bookRatingService.getPublishedReviews(bookId, page, size, sort));
     }
 
     @PutMapping("/reviews/{reviewId}")

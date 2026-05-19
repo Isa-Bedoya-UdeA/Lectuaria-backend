@@ -41,4 +41,13 @@ public interface UserListBookRepository extends JpaRepository<UserListBook, Long
     @Modifying
     @Query("DELETE FROM UserListBook ulb WHERE ulb.userList.id = :listId")
     void deleteByUserListId(@Param("listId") Long listId);
+
+    long countDistinctByUserListUserId(Long userId);
+
+    @Query("SELECT g.id, g.name, COUNT(ulb) FROM UserListBook ulb JOIN ulb.book.genres g " +
+            "WHERE ulb.userList.user.id = :userId GROUP BY g.id, g.name ORDER BY COUNT(ulb) DESC, g.name ASC")
+    List<Object[]> findTopGenresByUserLists(@Param("userId") Long userId, Pageable pageable);
+
+    @Query("SELECT DISTINCT ulb.book.id FROM UserListBook ulb WHERE ulb.userList.user.id = :userId")
+    List<Long> findBookIdsByUserId(@Param("userId") Long userId);
 }

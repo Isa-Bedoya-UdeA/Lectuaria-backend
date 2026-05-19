@@ -19,6 +19,7 @@ import com.lectuaria.backend.model.book.BookRating;
 import com.lectuaria.backend.model.book.BookReview;
 import com.lectuaria.backend.model.book.BookRatingStats;
 import com.lectuaria.backend.model.book.ReviewStatus;
+import com.lectuaria.backend.model.book.ReviewSortOption;
 import com.lectuaria.backend.model.friendship.Friendship;
 import com.lectuaria.backend.model.notification.NotificationType;
 
@@ -31,6 +32,7 @@ import com.lectuaria.backend.service.notification.INotificationService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -233,11 +235,17 @@ public class BookRatingServiceImpl implements IBookRatingService {
 
     @Transactional(readOnly = true)
     public PaginatedResponse<BookReviewResponseDTO> getPublishedReviews(@NonNull Long bookId, int page, int size) {
+        return getPublishedReviews(bookId, page, size, ReviewSortOption.MOST_RECENT.name());
+    }
+
+    @Transactional(readOnly = true)
+    public PaginatedResponse<BookReviewResponseDTO> getPublishedReviews(@NonNull Long bookId, int page, int size, String sort) {
         getBookOrThrow(bookId);
-        Pageable pageable = PageRequest.of(Math.max(page, 0), size <= 0 ? 5 : size);
+        ReviewSortOption sortOption = ReviewSortOption.from(sort);
+        Pageable pageable = PageRequest.of(Math.max(page, 0), size <= 0 ? 5 : size, toRatingSort(sortOption));
 
         // Obtenemos todas las calificaciones (RATING) porque siempre son públicas
-        Page<BookRating> ratingsPage = bookRatingRepository.findByBookIdOrderByCreatedAtDesc(bookId, pageable);
+        Page<BookRating> ratingsPage = bookRatingRepository.findByBookId(bookId, pageable);
 
         List<BookReviewResponseDTO> content = ratingsPage.getContent().stream().map(rating -> {
             // Buscamos si hay una reseña escrita asociada a esta calificación
@@ -275,6 +283,15 @@ public class BookRatingServiceImpl implements IBookRatingService {
                 ratingsPage.isLast(),
                 ratingsPage.hasNext(),
                 ratingsPage.hasPrevious());
+    }
+
+    private Sort toRatingSort(ReviewSortOption sortOption) {
+        return switch (sortOption) {
+            case OLDEST -> Sort.by(Sort.Direction.ASC, "createdAt");
+            case HIGHEST_RATING -> Sort.by(Sort.Direction.DESC, "rating").and(Sort.by(Sort.Direction.DESC, "createdAt"));
+            case LOWEST_RATING -> Sort.by(Sort.Direction.ASC, "rating").and(Sort.by(Sort.Direction.DESC, "createdAt"));
+            case MOST_HELPFUL, MOST_RECENT -> Sort.by(Sort.Direction.DESC, "createdAt");
+        };
     }
 
     @Transactional

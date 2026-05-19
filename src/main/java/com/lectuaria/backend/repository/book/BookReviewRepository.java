@@ -18,6 +18,8 @@ public interface BookReviewRepository extends JpaRepository<BookReview, Long> {
 
     Page<BookReview> findByBookIdAndStatusOrderByPublishedAtDesc(Long bookId, ReviewStatus status, Pageable pageable);
 
+    long countByUserIdAndStatus(Long userId, ReviewStatus status);
+
     @Query("SELECT r FROM BookReview r WHERE r.user.id IN :userIds AND r.status = :status ORDER BY r.publishedAt DESC")
     List<BookReview> findRecentByUserIdsAndStatus(@Param("userIds") List<Long> userIds, @Param("status") ReviewStatus status, Pageable pageable);
 }
