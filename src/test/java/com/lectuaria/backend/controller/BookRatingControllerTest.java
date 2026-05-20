@@ -180,7 +180,7 @@ class BookRatingControllerTest {
 
         @Test
         void shouldGetPublishedReviewsPaginated() throws Exception {
-                when(bookRatingService.getPublishedReviews(10L, 0, 5))
+                when(bookRatingService.getPublishedReviews(10L, 0, 5, "MOST_RECENT"))
                                 .thenReturn(new PaginatedResponse<>(
                                                 List.of(),
                                                 0,

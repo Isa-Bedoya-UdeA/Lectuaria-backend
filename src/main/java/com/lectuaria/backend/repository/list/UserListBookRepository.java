@@ -50,4 +50,12 @@ public interface UserListBookRepository extends JpaRepository<UserListBook, Long
 
     @Query("SELECT DISTINCT ulb.book.id FROM UserListBook ulb WHERE ulb.userList.user.id = :userId")
     List<Long> findBookIdsByUserId(@Param("userId") Long userId);
+
+    @Query("SELECT DISTINCT ulb.book.id FROM UserListBook ulb WHERE ulb.userList.user.id = :userId " +
+            "AND LOWER(ulb.userList.name) IN ('favoritos', 'leídos', 'leidos')")
+    List<Long> findReadBookIdsInListsByUserId(@Param("userId") Long userId);
+
+    @Query("SELECT ulb.book.id, ulb.addedAt FROM UserListBook ulb WHERE ulb.userList.user.id = :userId " +
+            "AND LOWER(ulb.userList.name) IN ('favoritos', 'leídos', 'leidos')")
+    List<Object[]> findReadBooksAndAddedAtByUserId(@Param("userId") Long userId);
 }

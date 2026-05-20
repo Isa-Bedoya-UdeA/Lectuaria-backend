@@ -44,29 +44,29 @@ public class LibraryBookController {
 
         // Obtener el usuario autenticado desde el contexto de seguridad de Spring
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        logger.info("LibraryBookController: Bulk upload initiated by user: {}", authentication.getName());
+        logger.info("Bulk upload initiated");
 
         if (authentication == null || !authentication.isAuthenticated()) {
-            logger.warn("LibraryBookController: User is not authenticated");
+            logger.warn("User is not authenticated");
             throw new UnauthorizedException("Usuario no autenticado");
         }
 
         String email = authentication.getName();
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> {
-                    logger.error("LibraryBookController: User not found with email: {}", email);
+                    logger.error("User not found");
                     return new UnauthorizedException("Usuario no encontrado");
                 });
 
-        logger.info("LibraryBookController: User found with email: {}, role: {}", email, user.getRole());
+        logger.info("User found");
 
         if (user.getRole() != UserRole.LIBRARIAN) {
-            logger.warn("LibraryBookController: User {} is not a librarian, role: {}", email, user.getRole());
+            logger.warn("User is not a librarian");
             throw new UnauthorizedException("Acceso denegado: solo bibliotecarios pueden realizar esta acción");
         }
 
         Long userId = user.getId();
-        logger.info("LibraryBookController: Processing CSV upload for user: {} with userId: {}", email, userId);
+        logger.info("Processing CSV upload for userId: {}", userId);
         return ResponseEntity.ok(bulkUploadService.processCsv(file, userId));
     }
 

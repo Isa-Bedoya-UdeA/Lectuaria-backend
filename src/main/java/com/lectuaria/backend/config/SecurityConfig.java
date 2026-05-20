@@ -59,6 +59,10 @@ public class SecurityConfig {
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/books").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/books/*").permitAll()
 
+                        // Endpoints de Estadísticas Protegidos por Rol
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/libraries/me/statistics").hasAnyRole("LIBRARIAN", "ADMIN")
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/users/*/reading-statistics").hasAnyRole("READER", "ADMIN")
+
                         // 3. Otros Endpoints Públicos
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/libraries").permitAll()
                         .requestMatchers("/api/books/publish/**").permitAll()

@@ -1,6 +1,12 @@
 package com.lectuaria.backend.service.book.impl;
 
 import com.lectuaria.backend.dto.book.*;
+import com.lectuaria.backend.model.auth.User;
+import com.lectuaria.backend.model.book.CsvUpload;
+import com.lectuaria.backend.model.book.CsvUploadError;
+import com.lectuaria.backend.repository.auth.UserRepository;
+import com.lectuaria.backend.repository.book.CsvUploadErrorRepository;
+import com.lectuaria.backend.repository.book.CsvUploadRepository;
 import com.lectuaria.backend.service.book.IBulkUploadService;
 import com.lectuaria.backend.service.book.IBookPublishService;
 import org.springframework.stereotype.Service;
@@ -8,6 +14,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -21,13 +28,38 @@ import java.util.List;
 public class BulkUploadServiceImpl implements IBulkUploadService {
 
     private final IBookPublishService bookPublishService;
+    private final UserRepository userRepository;
+    private final CsvUploadRepository csvUploadRepository;
+    private final CsvUploadErrorRepository csvUploadErrorRepository;
 
-    public BulkUploadServiceImpl(IBookPublishService bookPublishService) {
+    public BulkUploadServiceImpl(IBookPublishService bookPublishService,
+                                 UserRepository userRepository,
+                                 CsvUploadRepository csvUploadRepository,
+                                 CsvUploadErrorRepository csvUploadErrorRepository) {
         this.bookPublishService = bookPublishService;
+        this.userRepository = userRepository;
+        this.csvUploadRepository = csvUploadRepository;
+        this.csvUploadErrorRepository = csvUploadErrorRepository;
     }
 
     public BulkUploadResultDTO processCsv(MultipartFile file, Long userId) {
         BulkUploadResultDTO result = new BulkUploadResultDTO();
+
+        // 1. Fetch user to link to upload log
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado con ID: " + userId));
+
+        // 2. Initialize CsvUpload record
+        CsvUpload csvUpload = new CsvUpload();
+        csvUpload.setUser(user);
+        csvUpload.setFileName(file.getOriginalFilename());
+        csvUpload.setStatus("PENDING");
+        csvUpload.setUploadDate(LocalDateTime.now());
+        csvUpload = csvUploadRepository.save(csvUpload);
+
+        int totalRecords = 0;
+        int successfulRecords = 0;
+        int failedRecords = 0;
 
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream()))) {
             String lineContent;
@@ -37,6 +69,8 @@ public class BulkUploadServiceImpl implements IBulkUploadService {
             String headerLine = reader.readLine();
             if (headerLine == null) {
                 result.addError("El archivo está vacío");
+                csvUpload.setStatus("FAILED");
+                csvUploadRepository.save(csvUpload);
                 return result;
             }
 
@@ -46,6 +80,8 @@ public class BulkUploadServiceImpl implements IBulkUploadService {
                 if (lineContent.trim().isEmpty())
                     continue;
 
+                totalRecords++;
+
                 try {
                     // Simple CSV parsing (handles quotes basicly)
                     String[] line = parseCsvLine(lineContent);
@@ -53,10 +89,16 @@ public class BulkUploadServiceImpl implements IBulkUploadService {
                     // Structure: ISBN, Title, Authors, Genres, Description, Editorial, Pages, PublicationDate, CoverUrl, PhysicalCopies, DigitalAvailable
                     BookPublishRequestDTO request = new BookPublishRequestDTO();
 
+                    Long isbn = null;
                     try {
-                        request.setIsbn(Long.parseLong(line[0].trim()));
+                        isbn = Long.parseLong(line[0].trim());
+                        request.setIsbn(isbn);
                     } catch (NumberFormatException e) {
-                        result.addError("Fila " + rowIndex + ": ISBN inválido (" + line[0] + ")");
+                        String errMsg = "ISBN inválido (" + line[0] + ")";
+                        result.addError("Fila " + rowIndex + ": " + errMsg);
+                        saveUploadError(csvUpload, rowIndex, null, errMsg);
+                        failedRecords++;
+                        rowIndex++;
                         continue;
                     }
 
@@ -107,7 +149,11 @@ public class BulkUploadServiceImpl implements IBulkUploadService {
                     
                     // Validar que el formato sea uno de los permitidos
                     if (!formato.equals("digital") && !formato.equals("ambos") && !formato.equals("fisico")) {
-                        result.addError("Fila " + rowIndex + ": Formato inválido (\"" + formatoRaw + "\"). Los formatos permitidos son: físico, digital, ambos");
+                        String errMsg = "Formato inválido (\"" + formatoRaw + "\"). Los formatos permitidos son: físico, digital, ambos";
+                        result.addError("Fila " + rowIndex + ": " + errMsg);
+                        saveUploadError(csvUpload, rowIndex, isbn, errMsg);
+                        failedRecords++;
+                        rowIndex++;
                         continue;
                     }
                     
@@ -140,17 +186,50 @@ public class BulkUploadServiceImpl implements IBulkUploadService {
 
                     BookPublishResponseDTO response = bookPublishService.publishBook(request, userId);
                     result.addSuccess(response);
+                    successfulRecords++;
 
                 } catch (Exception e) {
                     result.addError("Fila " + rowIndex + ": " + e.getMessage());
+                    Long parsedIsbn = null;
+                    try {
+                        String[] line = parseCsvLine(lineContent);
+                        parsedIsbn = Long.parseLong(line[0].trim());
+                    } catch (Exception ignored) {}
+                    saveUploadError(csvUpload, rowIndex, parsedIsbn, e.getMessage());
+                    failedRecords++;
                 }
                 rowIndex++;
             }
         } catch (Exception e) {
             result.addError("Error general al procesar el archivo: " + e.getMessage());
+            csvUpload.setStatus("FAILED");
         }
 
+        // 3. Update CsvUpload stats and final status
+        csvUpload.setTotalRecords(totalRecords);
+        csvUpload.setSuccessfulRecords(successfulRecords);
+        csvUpload.setFailedRecords(failedRecords);
+
+        if (!"FAILED".equals(csvUpload.getStatus())) {
+            if (successfulRecords > 0) {
+                csvUpload.setStatus("PROCESSED");
+            } else {
+                csvUpload.setStatus("FAILED");
+            }
+        }
+        csvUploadRepository.save(csvUpload);
+
         return result;
+    }
+
+    private void saveUploadError(CsvUpload csvUpload, int rowNumber, Long isbn, String message) {
+        CsvUploadError errorRecord = new CsvUploadError();
+        errorRecord.setCsvUpload(csvUpload);
+        errorRecord.setRowNumber(rowNumber);
+        errorRecord.setIsbn(isbn);
+        errorRecord.setErrorMessage(message != null ? message : "Error desconocido");
+        errorRecord.setCreatedAt(LocalDateTime.now());
+        csvUploadErrorRepository.save(errorRecord);
     }
 
     /**

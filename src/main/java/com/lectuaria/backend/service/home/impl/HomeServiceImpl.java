@@ -19,6 +19,8 @@ import com.lectuaria.backend.repository.friendship.FriendshipRepository;
 import com.lectuaria.backend.repository.list.UserListBookRepository;
 import com.lectuaria.backend.service.book.IBookService;
 import com.lectuaria.backend.service.home.IHomeService;
+import com.lectuaria.backend.model.book.UserRecommendation;
+import com.lectuaria.backend.repository.book.UserRecommendationRepository;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,8 +34,8 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @Service
@@ -48,17 +50,18 @@ public class HomeServiceImpl implements IHomeService {
     private final BookRatingRepository ratingRepository;
     private final BookRepository bookRepository;
     private final IBookService bookService;
-    private final Map<Long, Set<Long>> hiddenRecommendations = new ConcurrentHashMap<>();
+    private final UserRecommendationRepository userRecommendationRepository;
 
     public HomeServiceImpl(FriendshipRepository friendshipRepository, UserListBookRepository listBookRepository,
             BookReviewRepository reviewRepository, BookRatingRepository ratingRepository, BookRepository bookRepository,
-            IBookService bookService) {
+            IBookService bookService, UserRecommendationRepository userRecommendationRepository) {
         this.friendshipRepository = friendshipRepository;
         this.listBookRepository = listBookRepository;
         this.reviewRepository = reviewRepository;
         this.ratingRepository = ratingRepository;
         this.bookRepository = bookRepository;
         this.bookService = bookService;
+        this.userRecommendationRepository = userRecommendationRepository;
     }
 
     public HomeResponseDTO getHome(User user, Long genreId, String formatName) {
@@ -69,14 +72,34 @@ public class HomeServiceImpl implements IHomeService {
                 getRecommendations(user, MIN_RECOMMENDATIONS));
     }
 
+    @Transactional
     public List<RecommendationDTO> getRecommendations(User user, int size) {
         int requestedSize = Math.max(size, MIN_RECOMMENDATIONS);
-        Instant generatedAt = Instant.now();
-        Instant nextRefreshAt = generatedAt.plus(RECOMMENDATION_REFRESH_INTERVAL);
+        Instant sevenDaysAgo = Instant.now().minus(RECOMMENDATION_REFRESH_INTERVAL);
+
+        // 1. Try to fetch active (non-hidden) records from DB
+        List<UserRecommendation> activeRecs = userRecommendationRepository.findByUserIdAndHiddenFalse(user.getId());
+
+        if (!activeRecs.isEmpty()) {
+            UserRecommendation firstRec = activeRecs.get(0);
+            if (firstRec.getCalculatedAt() != null && firstRec.getCalculatedAt().isAfter(sevenDaysAgo)) {
+                return activeRecs.stream()
+                        .map(rec -> new RecommendationDTO(
+                                toSummaryDTO(rec.getBook()),
+                                rec.getReason(),
+                                rec.getCalculatedAt(),
+                                rec.getCalculatedAt().plus(RECOMMENDATION_REFRESH_INTERVAL)
+                        ))
+                        .collect(Collectors.toList());
+            }
+        }
+
+        // 2. If no records OR stale (>7 days): delete active records, fetch hidden, compute new
+        userRecommendationRepository.deleteActiveByUserId(user.getId());
 
         Set<Long> excludedIds = new HashSet<>(ratingRepository.findRatedBookIdsByUserId(user.getId()));
         excludedIds.addAll(listBookRepository.findBookIdsByUserId(user.getId()));
-        excludedIds.addAll(hiddenRecommendations.getOrDefault(user.getId(), Set.of()));
+        excludedIds.addAll(userRecommendationRepository.findHiddenBookIdsByUserId(user.getId()));
 
         List<Object[]> genreRows = new ArrayList<>();
         genreRows.addAll(ratingRepository.findTopGenresByUserRatings(user.getId(), PageRequest.of(0, 10)));
@@ -97,18 +120,51 @@ public class HomeServiceImpl implements IHomeService {
         }
 
         Set<Long> seen = new HashSet<>();
-        return candidates.stream()
+        List<Book> selectedBooks = candidates.stream()
                 .filter(book -> !excludedIds.contains(book.getId()))
                 .filter(book -> seen.add(book.getId()))
                 .limit(requestedSize)
-                .map(book -> new RecommendationDTO(toSummaryDTO(book), buildRecommendationReason(book, genreNames),
-                        generatedAt, nextRefreshAt))
                 .toList();
+
+        Instant generatedAt = Instant.now();
+        List<UserRecommendation> newRecs = new ArrayList<>();
+        int index = 0;
+        for (Book book : selectedBooks) {
+            String reason = buildRecommendationReason(book, genreNames);
+            BigDecimal score = book.getAverageRating() != null ? book.getAverageRating() : BigDecimal.ZERO;
+            UserRecommendation rec = new UserRecommendation(user, book, reason, score);
+            rec.setCalculatedAt(generatedAt);
+            newRecs.add(rec);
+            index++;
+        }
+
+        userRecommendationRepository.saveAll(newRecs);
+
+        return newRecs.stream()
+                .map(rec -> new RecommendationDTO(
+                        toSummaryDTO(rec.getBook()),
+                        rec.getReason(),
+                        rec.getCalculatedAt(),
+                        rec.getCalculatedAt().plus(RECOMMENDATION_REFRESH_INTERVAL)
+                ))
+                .collect(Collectors.toList());
     }
 
     @Transactional
     public void hideRecommendation(User user, Long bookId) {
-        hiddenRecommendations.computeIfAbsent(user.getId(), ignored -> ConcurrentHashMap.newKeySet()).add(bookId);
+        Optional<UserRecommendation> existing = userRecommendationRepository.findByUserIdAndBookId(user.getId(), bookId);
+        if (existing.isPresent()) {
+            UserRecommendation rec = existing.get();
+            rec.setHidden(true);
+            userRecommendationRepository.save(rec);
+        } else {
+            Book book = bookRepository.findById(bookId)
+                    .orElseThrow(() -> new IllegalArgumentException("Book not found with id: " + bookId));
+            UserRecommendation rec = new UserRecommendation(user, book, "Ocultado por el usuario", BigDecimal.ZERO);
+            rec.setHidden(true);
+            rec.setCalculatedAt(Instant.now());
+            userRecommendationRepository.save(rec);
+        }
     }
 
     public List<FriendActivityDTO> getFriendActivity(User user, int size) {

@@ -19,6 +19,7 @@ import com.lectuaria.backend.model.list.ListVisibility;
 import com.lectuaria.backend.repository.auth.UserRepository;
 import com.lectuaria.backend.repository.book.BookReviewRepository;
 import com.lectuaria.backend.repository.book.BookRatingRepository;
+import com.lectuaria.backend.repository.book.GenreRepository;
 import com.lectuaria.backend.repository.friendship.FriendshipRepository;
 import com.lectuaria.backend.repository.friendship.FriendshipRequestRepository;
 import com.lectuaria.backend.repository.list.UserListBookRepository;
@@ -34,13 +35,14 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.HashSet;
+import java.util.Set;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.Map;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 @Service
@@ -54,6 +56,7 @@ public class UserProfileServiceImpl implements IUserProfileService {
     private final UserListBookRepository userListBookRepository;
     private final UserListShareLinkRepository userListShareLinkRepository;
     private final UserListShareRepository userListShareRepository;
+    private final GenreRepository genreRepository;
 
     public UserProfileServiceImpl(UserRepository userRepository,
                                    FriendshipRepository friendshipRepository,
@@ -62,7 +65,8 @@ public class UserProfileServiceImpl implements IUserProfileService {
                                    BookRatingRepository bookRatingRepository,
                                    UserListBookRepository userListBookRepository,
                                    UserListShareLinkRepository userListShareLinkRepository,
-                                   UserListShareRepository userListShareRepository) {
+                                   UserListShareRepository userListShareRepository,
+                                   GenreRepository genreRepository) {
         this.userRepository = userRepository;
         this.friendshipRepository = friendshipRepository;
         this.friendshipRequestRepository = friendshipRequestRepository;
@@ -71,6 +75,7 @@ public class UserProfileServiceImpl implements IUserProfileService {
         this.userListBookRepository = userListBookRepository;
         this.userListShareLinkRepository = userListShareLinkRepository;
         this.userListShareRepository = userListShareRepository;
+        this.genreRepository = genreRepository;
     }
 
     @Transactional(readOnly = true)
@@ -101,7 +106,12 @@ public class UserProfileServiceImpl implements IUserProfileService {
         Integer friendsCount = friendshipRepository.findFriendsByUserId(user.getId()).size();
         Integer reviewsCount = (int) bookReviewRepository.countByUserIdAndStatus(user.getId(), ReviewStatus.published);
         Integer favoritesCount = (int) userListBookRepository.countDistinctByUserListUserId(user.getId());
-        Integer booksRead = (int) bookRatingRepository.countDistinctByUserId(user.getId());
+        
+        // Calculate books read using unified criteria: rated books OR books in "Favoritos"/"Leídos" lists
+        Set<Long> readBookIds = new HashSet<>();
+        readBookIds.addAll(bookRatingRepository.findRatedBookIdsByUserId(user.getId()));
+        readBookIds.addAll(userListBookRepository.findReadBookIdsInListsByUserId(user.getId()));
+        Integer booksRead = readBookIds.size();
 
         return new UserStatsDTO(booksRead, reviewsCount, friendsCount, favoritesCount);
     }
@@ -112,34 +122,91 @@ public class UserProfileServiceImpl implements IUserProfileService {
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
 
         int currentYear = LocalDate.now(ZoneOffset.UTC).getYear();
-        Instant currentYearStart = LocalDate.of(currentYear, 1, 1).atStartOfDay().toInstant(ZoneOffset.UTC);
-        Instant nextYearStart = LocalDate.of(currentYear + 1, 1, 1).atStartOfDay().toInstant(ZoneOffset.UTC);
-        Instant previousYearStart = LocalDate.of(currentYear - 1, 1, 1).atStartOfDay().toInstant(ZoneOffset.UTC);
+        LocalDate currentYearStart = LocalDate.of(currentYear, 1, 1);
+        LocalDate nextYearStart = LocalDate.of(currentYear + 1, 1, 1);
+        LocalDate previousYearStart = LocalDate.of(currentYear - 1, 1, 1);
 
-        Map<Integer, Long> monthlyCounts = bookRatingRepository
-                .countBooksReadByMonth(user.getId(), currentYearStart, nextYearStart)
-                .stream()
-                .collect(Collectors.toMap(row -> ((Number) row[0]).intValue(), row -> ((Number) row[1]).longValue()));
-
+        // Fetch rated books with their creation dates
+        List<Object[]> ratedBooksData = bookRatingRepository.findRatedBooksAndCreatedAtByUserId(user.getId());
+        
+        // Fetch books in standard lists with their addition dates
+        List<Object[]> listBooksData = userListBookRepository.findReadBooksAndAddedAtByUserId(user.getId());
+        
+        // Merge them: create a map of bookId -> earliest read date (minimum of rating and list addition)
+        Map<Long, Instant> readBooksMap = new java.util.HashMap<>();
+        
+        for (Object[] row : ratedBooksData) {
+            Long bookId = ((Number) row[0]).longValue();
+            Instant createdAt = (Instant) row[1];
+            readBooksMap.put(bookId, createdAt);
+        }
+        
+        for (Object[] row : listBooksData) {
+            Long bookId = ((Number) row[0]).longValue();
+            Instant addedAt = (Instant) row[1];
+            // Keep the earliest date if this book was already in the map
+            if (readBooksMap.containsKey(bookId)) {
+                Instant earlierDate = readBooksMap.get(bookId);
+                if (addedAt.isBefore(earlierDate)) {
+                    readBooksMap.put(bookId, addedAt);
+                }
+            } else {
+                readBooksMap.put(bookId, addedAt);
+            }
+        }
+        
+        // Calculate monthly reading progress for current year
+        Map<Integer, Long> monthlyCounts = new java.util.HashMap<>();
+        for (Map.Entry<Long, Instant> entry : readBooksMap.entrySet()) {
+            Instant readDate = entry.getValue();
+            LocalDate date = LocalDate.ofInstant(readDate, ZoneOffset.UTC);
+            
+            // Only count books read in the current year
+            if (!date.isBefore(currentYearStart) && date.isBefore(nextYearStart)) {
+                int month = date.getMonthValue();
+                monthlyCounts.put(month, monthlyCounts.getOrDefault(month, 0L) + 1);
+            }
+        }
+        
         List<MonthlyBooksReadDTO> booksReadByMonth = IntStream.rangeClosed(1, 12)
                 .mapToObj(month -> new MonthlyBooksReadDTO(month, monthlyCounts.getOrDefault(month, 0L)))
                 .toList();
-
-        long currentYearBooks = bookRatingRepository.countDistinctBooksByUserIdAndCreatedAtBetween(
-                user.getId(), currentYearStart, nextYearStart);
-        long previousYearBooks = bookRatingRepository.countDistinctBooksByUserIdAndCreatedAtBetween(
-                user.getId(), previousYearStart, currentYearStart);
-
-        BigDecimal averageRating = bookRatingRepository.calculateAverageRatingByUserId(user.getId())
-                .setScale(2, RoundingMode.HALF_UP);
-
+        
+        // Calculate yearly comparisons
+        long currentYearBooks = readBooksMap.values().stream()
+                .filter(instant -> {
+                    LocalDate date = LocalDate.ofInstant(instant, ZoneOffset.UTC);
+                    return !date.isBefore(currentYearStart) && date.isBefore(nextYearStart);
+                })
+                .count();
+        
+        long previousYearBooks = readBooksMap.values().stream()
+                .filter(instant -> {
+                    LocalDate date = LocalDate.ofInstant(instant, ZoneOffset.UTC);
+                    return !date.isBefore(previousYearStart) && date.isBefore(currentYearStart);
+                })
+                .count();
+        
+        // Calculate average rating of read books
+        BigDecimal averageRating = BigDecimal.ZERO;
+        if (!readBooksMap.isEmpty()) {
+            averageRating = bookRatingRepository.calculateAverageRatingByUserId(user.getId())
+                    .setScale(2, RoundingMode.HALF_UP);
+        }
+        
+        // Fetch top genres by read book IDs
+        List<GenreCountDTO> topGenres = new ArrayList<>();
+        if (!readBooksMap.isEmpty()) {
+            topGenres = genreRepository.findTopGenresByBookIds(new ArrayList<>(readBooksMap.keySet()), PageRequest.of(0, 5))
+                    .stream()
+                    .map(row -> new GenreCountDTO(((Number) row[0]).longValue(), (String) row[1], ((Number) row[2]).longValue()))
+                    .toList();
+        }
+        
         return new ReadingStatisticsDTO(
-                bookRatingRepository.countDistinctByUserId(user.getId()),
+                (long) readBooksMap.size(),
                 averageRating,
-                bookRatingRepository.findTopGenresByUserRatings(user.getId(), PageRequest.of(0, 5))
-                        .stream()
-                        .map(row -> new GenreCountDTO(((Number) row[0]).longValue(), (String) row[1], ((Number) row[2]).longValue()))
-                        .toList(),
+                topGenres,
                 booksReadByMonth,
                 new YearComparisonDTO(currentYear, currentYearBooks, currentYear - 1, previousYearBooks),
                 Instant.now());
@@ -272,11 +339,6 @@ public class UserProfileServiceImpl implements IUserProfileService {
                 // If repository not available or error, keep publicToken as null
                 publicToken = null;
             }
-            
-            System.out.println("DEBUG: ListBook - ListId: " + listBook.getUserList().getId() + 
-                              ", ListName: " + listBook.getUserList().getName() + 
-                              ", Visibility: " + listBook.getUserList().getVisibility().name() + 
-                              ", PublicToken: " + publicToken);
             
             activities.add(new FriendActivityDTO(
                     listBook.getId(),

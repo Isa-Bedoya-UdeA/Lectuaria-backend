@@ -12,6 +12,6 @@ public class EmailServiceImpl implements IEmailService {
 
     @Override
     public void sendRegistrationConfirmation(String to, String displayName) {
-        logger.info("Correo de confirmación enviado a {} para {}", to, displayName);
+        logger.info("Correo de confirmación enviado con éxito");
     }
 }

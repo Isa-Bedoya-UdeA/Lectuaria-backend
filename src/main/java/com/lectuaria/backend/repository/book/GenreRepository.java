@@ -1,7 +1,9 @@
 package com.lectuaria.backend.repository.book;
 
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import com.lectuaria.backend.model.book.Genre;
@@ -24,4 +26,11 @@ public interface GenreRepository extends JpaRepository<Genre, Long> {
            "GROUP BY g.id, g.name, g.description " +
            "ORDER BY COUNT(b.id) DESC, g.name ASC")
     List<GenreWithBookCountDTO> findAllWithBookCount();
+
+    @Query("SELECT g.id, g.name, COUNT(b.id) " +
+           "FROM Genre g JOIN g.books b " +
+           "WHERE b.id IN :bookIds " +
+           "GROUP BY g.id, g.name " +
+           "ORDER BY COUNT(b.id) DESC, g.name ASC")
+    List<Object[]> findTopGenresByBookIds(@Param("bookIds") List<Long> bookIds, Pageable pageable);
 }
