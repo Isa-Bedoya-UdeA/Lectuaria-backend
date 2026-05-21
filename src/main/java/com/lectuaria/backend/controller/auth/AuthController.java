@@ -6,6 +6,7 @@ import com.lectuaria.backend.dto.auth.ProfileResponseDTO;
 import com.lectuaria.backend.dto.auth.ProfileUpdateRequestDTO;
 import com.lectuaria.backend.dto.auth.RegisterRequestDTO;
 import com.lectuaria.backend.dto.auth.RegisterResponseDTO;
+import com.lectuaria.backend.dto.auth.ChangePasswordRequestDTO;
 import com.lectuaria.backend.exception.UnauthorizedException;
 import com.lectuaria.backend.service.auth.IAuthService;
 import com.lectuaria.backend.security.JwtService;
@@ -101,6 +102,15 @@ public class AuthController {
             @Valid @RequestBody ProfileUpdateRequestDTO profileUpdateRequest) { // ← Agregar @Valid
         String email = extractEmail(request);
         return authService.updateProfile(email, profileUpdateRequest);
+    }
+
+    @PostMapping("/change-password")
+    public ResponseEntity<Map<String, String>> changePassword(
+            HttpServletRequest request,
+            @Valid @RequestBody ChangePasswordRequestDTO dto) {
+        String email = extractEmail(request);
+        authService.changePassword(email, dto.getCurrentPassword(), dto.getNewPassword());
+        return ResponseEntity.ok(Map.of("message", "Contraseña actualizada correctamente"));
     }
 
     @PostMapping("/refresh")

@@ -106,4 +106,8 @@ public class User {
     public void setBiography(String biography) {
         this.biography = biography;
     }
+
+    public void setPasswordHash(String passwordHash) {
+        this.passwordHash = passwordHash;
+    }
 }

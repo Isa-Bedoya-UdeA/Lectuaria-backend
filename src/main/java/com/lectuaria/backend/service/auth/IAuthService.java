@@ -14,4 +14,5 @@ public interface IAuthService {
     LoginResponseDTO refresh(String refreshTokenValue);
     ProfileResponseDTO getProfile(String email);
     ProfileResponseDTO updateProfile(String email, ProfileUpdateRequestDTO request);
+    void changePassword(String email, String currentPassword, String newPassword);
 }
