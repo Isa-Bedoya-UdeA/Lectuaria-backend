@@ -7,6 +7,7 @@ import com.lectuaria.backend.dto.user.UserStatsDTO;
 import com.lectuaria.backend.dto.statistics.GenreCountDTO;
 import com.lectuaria.backend.dto.statistics.MonthlyBooksReadDTO;
 import com.lectuaria.backend.dto.statistics.ReadingStatisticsDTO;
+import com.lectuaria.backend.dto.statistics.SocialStatisticsDTO;
 import com.lectuaria.backend.dto.statistics.YearComparisonDTO;
 import com.lectuaria.backend.exception.ResourceNotFoundException;
 import com.lectuaria.backend.model.auth.User;
@@ -25,6 +26,8 @@ import com.lectuaria.backend.repository.friendship.FriendshipRequestRepository;
 import com.lectuaria.backend.repository.list.UserListBookRepository;
 import com.lectuaria.backend.repository.list.UserListShareLinkRepository;
 import com.lectuaria.backend.repository.list.UserListShareRepository;
+import com.lectuaria.backend.repository.list.UserListRepository;
+import com.lectuaria.backend.repository.book.BookShareRepository;
 import com.lectuaria.backend.model.list.UserListShareLink;
 import com.lectuaria.backend.model.list.UserListShare;
 import com.lectuaria.backend.service.user.IUserProfileService;
@@ -38,7 +41,6 @@ import java.util.Optional;
 import java.util.HashSet;
 import java.util.Set;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -56,6 +58,8 @@ public class UserProfileServiceImpl implements IUserProfileService {
     private final UserListBookRepository userListBookRepository;
     private final UserListShareLinkRepository userListShareLinkRepository;
     private final UserListShareRepository userListShareRepository;
+    private final UserListRepository userListRepository;
+    private final BookShareRepository bookShareRepository;
     private final GenreRepository genreRepository;
 
     public UserProfileServiceImpl(UserRepository userRepository,
@@ -66,6 +70,8 @@ public class UserProfileServiceImpl implements IUserProfileService {
                                    UserListBookRepository userListBookRepository,
                                    UserListShareLinkRepository userListShareLinkRepository,
                                    UserListShareRepository userListShareRepository,
+                                   UserListRepository userListRepository,
+                                   BookShareRepository bookShareRepository,
                                    GenreRepository genreRepository) {
         this.userRepository = userRepository;
         this.friendshipRepository = friendshipRepository;
@@ -75,6 +81,8 @@ public class UserProfileServiceImpl implements IUserProfileService {
         this.userListBookRepository = userListBookRepository;
         this.userListShareLinkRepository = userListShareLinkRepository;
         this.userListShareRepository = userListShareRepository;
+        this.userListRepository = userListRepository;
+        this.bookShareRepository = bookShareRepository;
         this.genreRepository = genreRepository;
     }
 
@@ -187,13 +195,9 @@ public class UserProfileServiceImpl implements IUserProfileService {
                 })
                 .count();
         
-        // Calculate average rating of read books
-        BigDecimal averageRating = BigDecimal.ZERO;
-        if (!readBooksMap.isEmpty()) {
-            averageRating = bookRatingRepository.calculateAverageRatingByUserId(user.getId())
-                    .setScale(2, RoundingMode.HALF_UP);
-        }
-        
+        // Calculate review count for current user
+        Integer reviewsCount = (int) bookReviewRepository.countByUserIdAndStatus(user.getId(), ReviewStatus.published);
+
         // Fetch top genres by read book IDs
         List<GenreCountDTO> topGenres = new ArrayList<>();
         if (!readBooksMap.isEmpty()) {
@@ -202,14 +206,43 @@ public class UserProfileServiceImpl implements IUserProfileService {
                     .map(row -> new GenreCountDTO(((Number) row[0]).longValue(), (String) row[1], ((Number) row[2]).longValue()))
                     .toList();
         }
-        
+
         return new ReadingStatisticsDTO(
                 (long) readBooksMap.size(),
-                averageRating,
+                reviewsCount,
                 topGenres,
                 booksReadByMonth,
                 new YearComparisonDTO(currentYear, currentYearBooks, currentYear - 1, previousYearBooks),
                 Instant.now());
+    }
+
+    @Transactional(readOnly = true)
+    public SocialStatisticsDTO getSocialStatistics(String usernameSlug) {
+        User user = userRepository.findByUsernameIgnoreCase(usernameSlug)
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
+
+        Long friendsCount = (long) friendshipRepository.findFriendsByUserId(user.getId()).size();
+
+        // Lists shared with me (received from friends)
+        Long listsSharedByFriends = (long) userListShareRepository.findByReceiverIdAndIsActiveTrue(user.getId()).size();
+
+        // Lists I've shared with friends (as the owner/sender)
+        Long listsIShared = (long) userListShareRepository.findByOwnerIdAndIsActiveTrue(user.getId()).size();
+
+        // Books I've shared with friends (as sender)
+        Long booksSharedWithFriends = (long) bookShareRepository.findBySenderId(user.getId()).size();
+
+        // Books shared by friends with me (as receiver)
+        Long booksSharedByFriends = (long) bookShareRepository.findByReceiverId(user.getId()).size();
+
+        return new SocialStatisticsDTO(
+                friendsCount,
+                listsSharedByFriends,
+                listsIShared,
+                booksSharedWithFriends,
+                booksSharedByFriends,
+                java.time.Instant.now()
+        );
     }
 
     private FriendshipStatus determineFriendshipStatus(User profileUser, User currentUser) {

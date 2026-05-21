@@ -26,6 +26,9 @@ import com.lectuaria.backend.model.auth.UserRole;
 import com.lectuaria.backend.model.library.Librarian;
 
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.criteria.Join;
+import jakarta.persistence.criteria.JoinType;
+import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -40,6 +43,8 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.time.temporal.TemporalAdjusters;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -617,12 +622,15 @@ public class BookServiceImpl implements IBookService {
             Long userId) {
         Pageable pageable = PageRequest.of(page, size);
 
+// Build search string from keywords — each word must match (OR across title/author/genre)
         String keywords = null;
         if (filter.getKeywords() != null && !filter.getKeywords().isEmpty()) {
-            keywords = String.join(" ", filter.getKeywords());
-            // Treat empty string as null to avoid SQL error
-            if (keywords.trim().isEmpty()) {
-                keywords = null;
+            List<String> words = filter.getKeywords().stream()
+                    .map(String::trim)
+                    .filter(k -> !k.isEmpty())
+                    .collect(Collectors.toList());
+            if (!words.isEmpty()) {
+                keywords = String.join(" ", words);
             }
         }
 
@@ -637,16 +645,145 @@ public class BookServiceImpl implements IBookService {
                 ? filter.getFormatTypes()
                 : null;
 
-        Page<Book> bookPage = bookRepository.searchBooksByMultipleFilters(
-                keywords,
-                genreIds,
-                libraryIds,
-                formatTypes,
-                filter.getMinYear(),
-                filter.getMaxYear(),
-                filter.getMinRating(),
-                pageable);
+        // Map formatTypes list to hasPhysical/hasDigital booleans
+        Boolean hasPhysical = null;
+        Boolean hasDigital = null;
+        if (formatTypes != null) {
+            hasPhysical = formatTypes.contains("physical");
+            hasDigital = formatTypes.contains("digital");
+        }
 
-        return toPaginatedResponseFromBooks(bookPage, this::toSummaryDTO);
+        // Build Specification for multi-keyword OR logic
+        Specification<Book> spec = Specification.where(null);
+
+        if (keywords != null && !keywords.isEmpty()) {
+            List<String> wordList = Arrays.asList(keywords.split("\\s+")).stream()
+                    .map(String::trim)
+                    .filter(w -> !w.isEmpty())
+                    .collect(Collectors.toList());
+            if (!wordList.isEmpty()) {
+                final List<String> words = wordList;
+                spec = spec.and((root, query, cb) -> {
+                    query.distinct(true);
+                    Join<Book, Author> authorJoin = root.join("authors", JoinType.LEFT);
+                    Join<Book, Genre> genreJoin = root.join("genres", JoinType.LEFT);
+                    // Single OR predicate across all words
+                    List<Predicate> wordPredicates = new ArrayList<>();
+                    for (String w : words) {
+                        String lower = w.toLowerCase();
+                        wordPredicates.add(cb.or(
+                                cb.like(cb.lower(root.get("title")), "%" + lower + "%"),
+                                cb.like(cb.lower(authorJoin.get("name")), "%" + lower + "%"),
+                                cb.like(cb.lower(genreJoin.get("name")), "%" + lower + "%")
+                        ));
+                    }
+                    return cb.or(wordPredicates.toArray(new Predicate[0]));
+                });
+            }
+        }
+
+        if (genreIds != null) {
+            spec = spec.and((root, query, cb) -> {
+                Join<Book, Genre> genreJoin = root.join("genres", JoinType.LEFT);
+                return cb.in(genreJoin.get("id")).value(genreIds);
+            });
+        }
+
+        if (libraryIds != null) {
+            spec = spec.and((root, query, cb) -> {
+                Join<Book, LibraryBook> lbJoin = root.join("libraryBooks", JoinType.LEFT);
+                return cb.in(lbJoin.get("library").get("id")).value(libraryIds);
+            });
+        }
+
+        if (hasPhysical != null || hasDigital != null) {
+            final Boolean hp = hasPhysical;
+            final Boolean hd = hasDigital;
+            spec = spec.and((root, query, cb) -> {
+                Join<Book, LibraryBook> lbJoin = root.join("libraryBooks", JoinType.LEFT);
+                List<Predicate> conditions = new ArrayList<>();
+                if (hp != null && hp) {
+                    conditions.add(cb.gt(lbJoin.get("physicalCopies"), 0));
+                }
+                if (hd != null && hd) {
+                    conditions.add(cb.isTrue(lbJoin.get("digitalAvailable")));
+                }
+                return conditions.stream().reduce(cb.conjunction(), cb::or);
+            });
+        }
+
+        if (filter.getMinYear() != null) {
+            spec = spec.and((root, query, cb) ->
+                    cb.greaterThanOrEqualTo(
+                            cb.function("date_part", Integer.class, cb.literal("year"), root.get("publicationDate")),
+                            filter.getMinYear())
+            );
+        }
+
+        if (filter.getMaxYear() != null) {
+            spec = spec.and((root, query, cb) ->
+                    cb.lessThanOrEqualTo(
+                            cb.function("date_part", Integer.class, cb.literal("year"), root.get("publicationDate")),
+                            filter.getMaxYear())
+            );
+        }
+
+        if (filter.getMinRating() != null) {
+            spec = spec.and((root, query, cb) ->
+                    cb.greaterThanOrEqualTo(root.get("averageRating"), filter.getMinRating()));
+        }
+
+Page<Book> bookPage = bookRepository.findAll(spec, pageable);
+
+        // Manual re-sorting to prioritize exact matches (title > author > partial)
+        List<Book> sortedBooks = new ArrayList<>(bookPage.getContent());
+        if (keywords != null && !sortedBooks.isEmpty()) {
+            List<String> words = Arrays.asList(keywords.toLowerCase().split("\\s+")).stream()
+                    .map(String::trim)
+                    .filter(w -> !w.isEmpty())
+                    .collect(Collectors.toList());
+            if (!words.isEmpty()) {
+                sortedBooks.sort((b1, b2) -> {
+                    int score1 = getMatchScore(b1, words);
+                    int score2 = getMatchScore(b2, words);
+                    if (score1 != score2) return Integer.compare(score1, score2);
+                    // Secondary: higher rating more reviews first
+                    BigDecimal r1 = b1.getAverageRating();
+                    BigDecimal r2 = b2.getAverageRating();
+                    int cmp = (r2 != null ? r2 : BigDecimal.ZERO).compareTo(r1 != null ? r1 : BigDecimal.ZERO);
+                    if (cmp != 0) return cmp;
+                    Integer c1 = b1.getRatingsCount() != null ? b1.getRatingsCount() : 0;
+                    Integer c2 = b2.getRatingsCount() != null ? b2.getRatingsCount() : 0;
+                    return Integer.compare(c2, c1);
+                });
+            }
+        }
+
+        return toPaginatedResponseFromBooks(new org.springframework.data.domain.PageImpl<>(
+                sortedBooks, pageable, bookPage.getTotalElements()), this::toSummaryDTO);
+    }
+
+    private int getMatchScore(Book book, List<String> words) {
+        String title = book.getTitle() != null ? book.getTitle().toLowerCase() : "";
+        String authorNames = book.getAuthors() != null
+                ? book.getAuthors().stream()
+                        .map(a -> a.getName() != null ? a.getName().toLowerCase() : "")
+                        .collect(Collectors.joining(" "))
+                : "";
+        int score = 100;
+        for (String w : words) {
+            // Exact title match = best
+            if (words.size() == 1 && title.equals(w)) return 0;
+            if (title.equals(w)) return Math.min(score, 1);
+            // Exact author match
+            if (words.size() == 1 && authorNames.contains(w)) return 10;
+            if (authorNames.contains(w)) return Math.min(score, 11);
+            // Partial title match
+            if (title.contains(w)) return Math.min(score, 20);
+            // Partial author match
+            if (authorNames.contains(w)) return Math.min(score, 21);
+            score++;
+        }
+        return score;
     }
 }

@@ -52,6 +52,30 @@ public class NotificationServiceImpl implements INotificationService {
     }
 
     @Override
+    @Transactional
+    public NotificationDTO createNotificationWithShareToken(Long userId, NotificationType notificationType, String message, Long referenceId, String shareToken) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        // Check if user has this notification type enabled
+        NotificationPreference preference = preferenceRepository.findByUserIdAndNotificationType(userId, notificationType)
+                .orElse(null);
+
+        // If preference doesn't exist or is disabled, don't create notification
+        if (preference == null || !preference.isEnabled()) {
+            return null;
+        }
+
+        Notification notification = new Notification(user, notificationType, message, referenceId);
+        if (shareToken != null && !shareToken.isEmpty()) {
+            notification.setShareToken(shareToken);
+        }
+        notification = notificationRepository.save(notification);
+
+        return mapToDTO(notification);
+    }
+
+    @Override
     public List<NotificationDTO> getUserNotifications(Long userId, Boolean unreadOnly) {
         List<Notification> notifications;
         if (unreadOnly != null && unreadOnly) {

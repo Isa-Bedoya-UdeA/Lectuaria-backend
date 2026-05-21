@@ -7,6 +7,7 @@ import java.util.List;
 
 public interface INotificationService {
     NotificationDTO createNotification(Long userId, NotificationType notificationType, String message, Long referenceId);
+    NotificationDTO createNotificationWithShareToken(Long userId, NotificationType notificationType, String message, Long referenceId, String shareToken);
     List<NotificationDTO> getUserNotifications(Long userId, Boolean unreadOnly);
     NotificationDTO markAsRead(Long notificationId, Long userId);
     void markAllAsRead(Long userId);

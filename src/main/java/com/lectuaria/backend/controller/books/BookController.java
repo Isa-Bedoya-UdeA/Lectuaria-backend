@@ -114,7 +114,7 @@ public class BookController {
 
         List<String> keywordList = null;
         if (keywords != null && !keywords.trim().isEmpty()) {
-            keywordList = Arrays.stream(keywords.split(","))
+            keywordList = Arrays.stream(keywords.split("[,\\s]+"))
                     .map(String::trim)
                     .filter(k -> !k.isEmpty())
                     .collect(Collectors.toList());

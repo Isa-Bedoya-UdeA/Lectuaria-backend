@@ -131,7 +131,7 @@ public class HomeServiceImpl implements IHomeService {
         int index = 0;
         for (Book book : selectedBooks) {
             String reason = buildRecommendationReason(book, genreNames);
-            BigDecimal score = book.getAverageRating() != null ? book.getAverageRating() : BigDecimal.ZERO;
+            BigDecimal score = buildRecommendationScore(book);
             UserRecommendation rec = new UserRecommendation(user, book, reason, score);
             rec.setCalculatedAt(generatedAt);
             newRecs.add(rec);
@@ -140,7 +140,19 @@ public class HomeServiceImpl implements IHomeService {
 
         userRecommendationRepository.saveAll(newRecs);
 
+        // Sort by score descending, then by book rating for tie-breaking
         return newRecs.stream()
+                .sorted(Comparator.comparing(UserRecommendation::getScore,
+                        Comparator.nullsLast(Comparator.reverseOrder())).reversed()
+                        .thenComparing((rec1, rec2) -> {
+                            BigDecimal r1 = rec1.getBook().getAverageRating() != null ? rec1.getBook().getAverageRating() : BigDecimal.ZERO;
+                            BigDecimal r2 = rec2.getBook().getAverageRating() != null ? rec2.getBook().getAverageRating() : BigDecimal.ZERO;
+                            int ratingCompare = r2.compareTo(r1);
+                            if (ratingCompare != 0) return ratingCompare;
+                            Integer c1 = rec1.getBook().getRatingsCount() != null ? rec1.getBook().getRatingsCount() : 0;
+                            Integer c2 = rec2.getBook().getRatingsCount() != null ? rec2.getBook().getRatingsCount() : 0;
+                            return c2.compareTo(c1);
+                        }))
                 .map(rec -> new RecommendationDTO(
                         toSummaryDTO(rec.getBook()),
                         rec.getReason(),
@@ -207,6 +219,15 @@ public class HomeServiceImpl implements IHomeService {
             return "Sugerido por su alta calificación en la comunidad";
         }
         return "Sugerido para descubrir nuevos libros populares";
+    }
+
+    private BigDecimal buildRecommendationScore(Book book) {
+        BigDecimal rating = book.getAverageRating() != null ? book.getAverageRating() : BigDecimal.ZERO;
+        Integer count = book.getRatingsCount() != null ? book.getRatingsCount() : 0;
+        // Score: weighted combination of rating and number of ratings
+        // Books with high rating AND many ratings get top priority
+        // Add small bonus for count to differentiate books with same rating
+        return rating.add(BigDecimal.valueOf(Math.min(count, 1000) / 1000.0));
     }
 
     private FriendActivityDTO toListActivity(UserListBook listBook) {

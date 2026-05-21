@@ -97,35 +97,71 @@ public interface BookRepository extends JpaRepository<Book, Long>, JpaSpecificat
 			"OR (:formatType = 'digital' AND lb.digitalAvailable = true)")
 	Page<Book> findByFormatAvailability(@Param("formatType") String formatType, Pageable pageable);
 
-	// Buscar libros por múltiples filtros
-	@Query("SELECT DISTINCT b FROM Book b " +
-			"WHERE " +
-			"(:keywords IS NULL OR " +
-			"(LOWER(b.title) LIKE LOWER(CONCAT('%', CAST(:keywords AS string), '%')) " +
-			"OR EXISTS (SELECT 1 FROM b.authors a WHERE LOWER(a.name) LIKE LOWER(CONCAT('%', CAST(:keywords AS string), '%'))) " +
-			"OR EXISTS (SELECT 1 FROM b.genres g WHERE LOWER(g.name) LIKE LOWER(CONCAT('%', CAST(:keywords AS string), '%'))))) " +
-			"AND " +
-			"(:genreIds IS NULL OR EXISTS (SELECT 1 FROM b.genres g WHERE g.id IN :genreIds)) " +
-			"AND " +
-			"(:libraryIds IS NULL OR EXISTS (SELECT 1 FROM b.libraryBooks lb WHERE lb.library.id IN :libraryIds)) " +
-			"AND " +
-			"(:formatTypes IS NULL OR " +
-			"EXISTS (SELECT 1 FROM b.libraryBooks lb WHERE " +
-			"('physical' IN :formatTypes AND lb.physicalCopies > 0) " +
-			"OR ('digital' IN :formatTypes AND lb.digitalAvailable = true))) " +
-			"AND " +
-			"(:minYear IS NULL OR YEAR(b.publicationDate) >= :minYear) " +
-			"AND " +
-			"(:maxYear IS NULL OR YEAR(b.publicationDate) <= :maxYear) " +
-			"AND " +
-			"(:minRating IS NULL OR b.averageRating >= :minRating)")
+	// Buscar libros por múltiples filtros con búsqueda por palabras + boost de coincidencia exacta
+	// Single keywords string: matches books where title OR author OR genre contains the keyword
+	// Splitting on whitespace in the service/controller before calling
+	@Query(value = """
+			SELECT b FROM Book b
+			LEFT JOIN b.authors a
+			LEFT JOIN b.genres g
+			WHERE
+			(:keywords IS NULL OR :keywords = '' OR
+				LOWER(b.title) LIKE LOWER(CONCAT('%', :keywords, '%'))
+				OR LOWER(a.name) LIKE LOWER(CONCAT('%', :keywords, '%'))
+				OR LOWER(g.name) LIKE LOWER(CONCAT('%', :keywords, '%'))
+			)
+			AND (:genreIds IS NULL OR EXISTS (
+				SELECT 1 FROM b.genres g2 WHERE g2.id IN :genreIds
+			))
+			AND (:libraryIds IS NULL OR EXISTS (
+				SELECT 1 FROM b.libraryBooks lb2 WHERE lb2.library.id IN :libraryIds
+			))
+			AND (:hasPhysical IS NULL AND :hasDigital IS NULL OR EXISTS (
+				SELECT 1 FROM b.libraryBooks lb3 WHERE
+				(:hasPhysical = TRUE AND lb3.physicalCopies > 0)
+				OR (:hasDigital = TRUE AND lb3.digitalAvailable = TRUE)
+			))
+			AND (:minYear IS NULL OR CAST(FUNCTION('date_part', 'year', b.publicationDate) AS INTEGER) >= :minYear)
+			AND (:maxYear IS NULL OR CAST(FUNCTION('date_part', 'year', b.publicationDate) AS INTEGER) <= :maxYear)
+			AND (:minRating IS NULL OR b.averageRating >= :minRating)
+			""",
+			countQuery = """
+			SELECT COUNT(b) FROM Book b
+			LEFT JOIN b.authors a
+			LEFT JOIN b.genres g
+			WHERE
+			(:keywords IS NULL OR :keywords = '' OR
+				LOWER(b.title) LIKE LOWER(CONCAT('%', :keywords, '%'))
+				OR LOWER(a.name) LIKE LOWER(CONCAT('%', :keywords, '%'))
+				OR LOWER(g.name) LIKE LOWER(CONCAT('%', :keywords, '%'))
+			)
+			AND (:genreIds IS NULL OR EXISTS (
+				SELECT 1 FROM b.genres g2 WHERE g2.id IN :genreIds
+			))
+			AND (:libraryIds IS NULL OR EXISTS (
+				SELECT 1 FROM b.libraryBooks lb2 WHERE lb2.library.id IN :libraryIds
+			))
+			AND (:hasPhysical IS NULL AND :hasDigital IS NULL OR EXISTS (
+				SELECT 1 FROM b.libraryBooks lb3 WHERE
+				(:hasPhysical = TRUE AND lb3.physicalCopies > 0)
+				OR (:hasDigital = TRUE AND lb3.digitalAvailable = TRUE)
+			))
+			AND (:minYear IS NULL OR CAST(FUNCTION('date_part', 'year', b.publicationDate) AS INTEGER) >= :minYear)
+			AND (:maxYear IS NULL OR CAST(FUNCTION('date_part', 'year', b.publicationDate) AS INTEGER) <= :maxYear)
+			AND (:minRating IS NULL OR b.averageRating >= :minRating)
+			""")
 	Page<Book> searchBooksByMultipleFilters(
 			@Param("keywords") String keywords,
 			@Param("genreIds") List<Long> genreIds,
 			@Param("libraryIds") List<Long> libraryIds,
-			@Param("formatTypes") List<String> formatTypes,
+			@Param("hasPhysical") Boolean hasPhysical,
+			@Param("hasDigital") Boolean hasDigital,
 			@Param("minYear") Integer minYear,
 			@Param("maxYear") Integer maxYear,
 			@Param("minRating") Float minRating,
 			Pageable pageable);
+
+	// For multi-keyword search: build predicate in service using Specification (supports OR logic across keywords)
+	@Query(value = "SELECT b FROM Book b WHERE b.id = :id")
+	Optional<Book> findByIdSimple(@Param("id") Long id);
 }
