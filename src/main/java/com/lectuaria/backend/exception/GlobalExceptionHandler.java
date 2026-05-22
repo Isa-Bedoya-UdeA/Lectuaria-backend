@@ -1,6 +1,7 @@
 package com.lectuaria.backend.exception;
 
 import com.lectuaria.backend.dto.ErrorResponseDTO;
+import com.lectuaria.backend.exception.ForbiddenException;
 
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
@@ -47,6 +48,12 @@ public class GlobalExceptionHandler {
         logger.warn("Illegal argument: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new ErrorResponseDTO(ex.getMessage(), List.of("Argumento inválido")));
+    }
+
+    @ExceptionHandler(ForbiddenException.class)
+    public ResponseEntity<ErrorResponseDTO> handleForbidden(ForbiddenException ex, HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(new ErrorResponseDTO(ex.getMessage(), List.of("Acceso denegado")));
     }
 
     @ExceptionHandler(Exception.class)

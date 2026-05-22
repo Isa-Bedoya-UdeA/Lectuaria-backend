@@ -13,6 +13,9 @@ public class UserProfileDTO {
     private UserStatsDTO stats;
     private FriendshipStatus friendshipStatus;
     private List<BookSummaryDTO> recentReviews;
+    private List<ReadingListSummaryDTO> readingLists;
+    private List<FriendSummaryDTO> friends;
+    private PrivacyGateDTO privacy;
 
     public UserProfileDTO() {}
 
@@ -52,6 +55,15 @@ public class UserProfileDTO {
     public List<BookSummaryDTO> getRecentReviews() { return recentReviews; }
     public void setRecentReviews(List<BookSummaryDTO> recentReviews) { this.recentReviews = recentReviews; }
 
+    public List<ReadingListSummaryDTO> getReadingLists() { return readingLists; }
+    public void setReadingLists(List<ReadingListSummaryDTO> readingLists) { this.readingLists = readingLists; }
+
+    public List<FriendSummaryDTO> getFriends() { return friends; }
+    public void setFriends(List<FriendSummaryDTO> friends) { this.friends = friends; }
+
+    public PrivacyGateDTO getPrivacy() { return privacy; }
+    public void setPrivacy(PrivacyGateDTO privacy) { this.privacy = privacy; }
+
     public static class BookSummaryDTO {
         private Long bookId;
         private String title;
@@ -83,5 +95,93 @@ public class UserProfileDTO {
 
         public Instant getCreatedAt() { return createdAt; }
         public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
+    }
+
+    public static class ReadingListSummaryDTO {
+        private Long id;
+        private String name;
+        private String description;
+        private String visibility;
+        private Integer bookCount;
+
+        public ReadingListSummaryDTO() {}
+
+        public ReadingListSummaryDTO(Long id, String name, String description, String visibility, Integer bookCount) {
+            this.id = id;
+            this.name = name;
+            this.description = description;
+            this.visibility = visibility;
+            this.bookCount = bookCount;
+        }
+
+        public Long getId() { return id; }
+        public void setId(Long id) { this.id = id; }
+
+        public String getName() { return name; }
+        public void setName(String name) { this.name = name; }
+
+        public String getDescription() { return description; }
+        public void setDescription(String description) { this.description = description; }
+
+        public String getVisibility() { return visibility; }
+        public void setVisibility(String visibility) { this.visibility = visibility; }
+
+        public Integer getBookCount() { return bookCount; }
+        public void setBookCount(Integer bookCount) { this.bookCount = bookCount; }
+    }
+
+    public static class FriendSummaryDTO {
+        private Long id;
+        private String username;
+        private String fullName;
+        private String photoUrl;
+
+        public FriendSummaryDTO() {}
+
+        public FriendSummaryDTO(Long id, String username, String fullName, String photoUrl) {
+            this.id = id;
+            this.username = username;
+            this.fullName = fullName;
+            this.photoUrl = photoUrl;
+        }
+
+        public Long getId() { return id; }
+        public void setId(Long id) { this.id = id; }
+
+        public String getUsername() { return username; }
+        public void setUsername(String username) { this.username = username; }
+
+        public String getFullName() { return fullName; }
+        public void setFullName(String fullName) { this.fullName = fullName; }
+
+        public String getPhotoUrl() { return photoUrl; }
+        public void setPhotoUrl(String photoUrl) { this.photoUrl = photoUrl; }
+    }
+
+    public static class PrivacyGateDTO {
+        private boolean profileVisible;
+        private String profileVisibility;
+        private String reviewsVisibility;
+        private String readingListsVisibility;
+        private String readingListsActivityVisibility;
+        private String friendsVisibility;
+
+        public boolean isProfileVisible() { return profileVisible; }
+        public void setProfileVisible(boolean profileVisible) { this.profileVisible = profileVisible; }
+
+        public String getProfileVisibility() { return profileVisibility; }
+        public void setProfileVisibility(String profileVisibility) { this.profileVisibility = profileVisibility; }
+
+        public String getReviewsVisibility() { return reviewsVisibility; }
+        public void setReviewsVisibility(String reviewsVisibility) { this.reviewsVisibility = reviewsVisibility; }
+
+        public String getReadingListsVisibility() { return readingListsVisibility; }
+        public void setReadingListsVisibility(String readingListsVisibility) { this.readingListsVisibility = readingListsVisibility; }
+
+        public String getReadingListsActivityVisibility() { return readingListsActivityVisibility; }
+        public void setReadingListsActivityVisibility(String readingListsActivityVisibility) { this.readingListsActivityVisibility = readingListsActivityVisibility; }
+
+        public String getFriendsVisibility() { return friendsVisibility; }
+        public void setFriendsVisibility(String friendsVisibility) { this.friendsVisibility = friendsVisibility; }
     }
 }

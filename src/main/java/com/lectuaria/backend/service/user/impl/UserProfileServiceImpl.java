@@ -17,6 +17,8 @@ import com.lectuaria.backend.model.friendship.Friendship;
 import com.lectuaria.backend.model.friendship.FriendshipRequest;
 import com.lectuaria.backend.model.list.UserListBook;
 import com.lectuaria.backend.model.list.ListVisibility;
+import com.lectuaria.backend.model.user.UserPrivacySettings;
+import com.lectuaria.backend.model.user.Visibility;
 import com.lectuaria.backend.repository.auth.UserRepository;
 import com.lectuaria.backend.repository.book.BookReviewRepository;
 import com.lectuaria.backend.repository.book.BookRatingRepository;
@@ -28,6 +30,7 @@ import com.lectuaria.backend.repository.list.UserListShareLinkRepository;
 import com.lectuaria.backend.repository.list.UserListShareRepository;
 import com.lectuaria.backend.repository.list.UserListRepository;
 import com.lectuaria.backend.repository.book.BookShareRepository;
+import com.lectuaria.backend.repository.user.UserPrivacySettingsRepository;
 import com.lectuaria.backend.model.list.UserListShareLink;
 import com.lectuaria.backend.model.list.UserListShare;
 import com.lectuaria.backend.service.user.IUserProfileService;
@@ -40,7 +43,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.HashSet;
 import java.util.Set;
-import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -61,6 +63,7 @@ public class UserProfileServiceImpl implements IUserProfileService {
     private final UserListRepository userListRepository;
     private final BookShareRepository bookShareRepository;
     private final GenreRepository genreRepository;
+    private final UserPrivacySettingsRepository privacyRepository;
 
     public UserProfileServiceImpl(UserRepository userRepository,
                                    FriendshipRepository friendshipRepository,
@@ -72,7 +75,8 @@ public class UserProfileServiceImpl implements IUserProfileService {
                                    UserListShareRepository userListShareRepository,
                                    UserListRepository userListRepository,
                                    BookShareRepository bookShareRepository,
-                                   GenreRepository genreRepository) {
+                                   GenreRepository genreRepository,
+                                   UserPrivacySettingsRepository privacyRepository) {
         this.userRepository = userRepository;
         this.friendshipRepository = friendshipRepository;
         this.friendshipRequestRepository = friendshipRequestRepository;
@@ -84,12 +88,27 @@ public class UserProfileServiceImpl implements IUserProfileService {
         this.userListRepository = userListRepository;
         this.bookShareRepository = bookShareRepository;
         this.genreRepository = genreRepository;
+        this.privacyRepository = privacyRepository;
     }
 
     @Transactional(readOnly = true)
     public UserProfileDTO getUserProfileByUsername(String usernameSlug, User currentUser) {
         User profileUser = userRepository.findByUsernameIgnoreCase(usernameSlug)
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
+
+        UserPrivacySettings privacy = getOrCreatePrivacySettings(profileUser.getId());
+        boolean areFriends = currentUser != null && friendshipRepository
+                .findByUsers(profileUser.getId(), currentUser.getId()).isPresent();
+        boolean isSelf = currentUser != null && profileUser.getId().equals(currentUser.getId());
+
+        // Gate: profile visibility
+        boolean profileVisible = isSelf
+                || privacy.getProfileVisibility() == Visibility.PUBLIC
+                || (privacy.getProfileVisibility() == Visibility.FRIENDS && areFriends);
+
+        if (!profileVisible) {
+            throw new com.lectuaria.backend.exception.ForbiddenException("Este perfil es privado");
+        }
 
         UserProfileDTO dto = new UserProfileDTO(
                 profileUser.getId(),
@@ -103,6 +122,34 @@ public class UserProfileServiceImpl implements IUserProfileService {
         dto.setStats(getUserStats(usernameSlug));
         dto.setFriendshipStatus(determineFriendshipStatus(profileUser, currentUser));
 
+        // Privacy gate info for UI decisions
+        UserProfileDTO.PrivacyGateDTO privacyGate = new UserProfileDTO.PrivacyGateDTO();
+        privacyGate.setProfileVisible(true);
+        privacyGate.setProfileVisibility(privacy.getProfileVisibility().name());
+        privacyGate.setReviewsVisibility(privacy.getReviewsVisibility().name());
+        privacyGate.setReadingListsVisibility(privacy.getReadingListsVisibility().name());
+        privacyGate.setReadingListsActivityVisibility(privacy.getReadingListsActivityVisibility().name());
+        privacyGate.setFriendsVisibility(privacy.getFriendsVisibility().name());
+        dto.setPrivacy(privacyGate);
+
+        // Reviews — filtered by privacy
+        if (isSelf || privacy.getReviewsVisibility() == Visibility.PUBLIC
+                || (privacy.getReviewsVisibility() == Visibility.FRIENDS && areFriends)) {
+            dto.setRecentReviews(getRecentReviews(profileUser.getId()));
+        }
+
+        // Reading lists — filtered by privacy
+        if (isSelf || privacy.getReadingListsVisibility() == Visibility.PUBLIC
+                || (privacy.getReadingListsVisibility() == Visibility.FRIENDS && areFriends)) {
+            dto.setReadingLists(getReadingLists(profileUser.getId(), currentUser));
+        }
+
+        // Friends — filtered by privacy
+        if (isSelf || privacy.getFriendsVisibility() == Visibility.PUBLIC
+                || (privacy.getFriendsVisibility() == Visibility.FRIENDS && areFriends)) {
+            dto.setFriends(getFriends(profileUser.getId()));
+        }
+
         return dto;
     }
 
@@ -114,8 +161,7 @@ public class UserProfileServiceImpl implements IUserProfileService {
         Integer friendsCount = friendshipRepository.findFriendsByUserId(user.getId()).size();
         Integer reviewsCount = (int) bookReviewRepository.countByUserIdAndStatus(user.getId(), ReviewStatus.published);
         Integer favoritesCount = (int) userListBookRepository.countDistinctByUserListUserId(user.getId());
-        
-        // Calculate books read using unified criteria: rated books OR books in "Favoritos"/"Leídos" lists
+
         Set<Long> readBookIds = new HashSet<>();
         readBookIds.addAll(bookRatingRepository.findRatedBookIdsByUserId(user.getId()));
         readBookIds.addAll(userListBookRepository.findReadBookIdsInListsByUserId(user.getId()));
@@ -134,25 +180,20 @@ public class UserProfileServiceImpl implements IUserProfileService {
         LocalDate nextYearStart = LocalDate.of(currentYear + 1, 1, 1);
         LocalDate previousYearStart = LocalDate.of(currentYear - 1, 1, 1);
 
-        // Fetch rated books with their creation dates
         List<Object[]> ratedBooksData = bookRatingRepository.findRatedBooksAndCreatedAtByUserId(user.getId());
-        
-        // Fetch books in standard lists with their addition dates
         List<Object[]> listBooksData = userListBookRepository.findReadBooksAndAddedAtByUserId(user.getId());
-        
-        // Merge them: create a map of bookId -> earliest read date (minimum of rating and list addition)
+
         Map<Long, Instant> readBooksMap = new java.util.HashMap<>();
-        
+
         for (Object[] row : ratedBooksData) {
             Long bookId = ((Number) row[0]).longValue();
             Instant createdAt = (Instant) row[1];
             readBooksMap.put(bookId, createdAt);
         }
-        
+
         for (Object[] row : listBooksData) {
             Long bookId = ((Number) row[0]).longValue();
             Instant addedAt = (Instant) row[1];
-            // Keep the earliest date if this book was already in the map
             if (readBooksMap.containsKey(bookId)) {
                 Instant earlierDate = readBooksMap.get(bookId);
                 if (addedAt.isBefore(earlierDate)) {
@@ -162,43 +203,38 @@ public class UserProfileServiceImpl implements IUserProfileService {
                 readBooksMap.put(bookId, addedAt);
             }
         }
-        
-        // Calculate monthly reading progress for current year
+
         Map<Integer, Long> monthlyCounts = new java.util.HashMap<>();
         for (Map.Entry<Long, Instant> entry : readBooksMap.entrySet()) {
             Instant readDate = entry.getValue();
             LocalDate date = LocalDate.ofInstant(readDate, ZoneOffset.UTC);
-            
-            // Only count books read in the current year
+
             if (!date.isBefore(currentYearStart) && date.isBefore(nextYearStart)) {
                 int month = date.getMonthValue();
                 monthlyCounts.put(month, monthlyCounts.getOrDefault(month, 0L) + 1);
             }
         }
-        
+
         List<MonthlyBooksReadDTO> booksReadByMonth = IntStream.rangeClosed(1, 12)
                 .mapToObj(month -> new MonthlyBooksReadDTO(month, monthlyCounts.getOrDefault(month, 0L)))
                 .toList();
-        
-        // Calculate yearly comparisons
+
         long currentYearBooks = readBooksMap.values().stream()
                 .filter(instant -> {
                     LocalDate date = LocalDate.ofInstant(instant, ZoneOffset.UTC);
                     return !date.isBefore(currentYearStart) && date.isBefore(nextYearStart);
                 })
                 .count();
-        
+
         long previousYearBooks = readBooksMap.values().stream()
                 .filter(instant -> {
-                    LocalDate date = LocalDate.ofInstant(instant, ZoneOffset.UTC);
+                    LocalDate date = instant.atZone(ZoneOffset.UTC).toLocalDate();
                     return !date.isBefore(previousYearStart) && date.isBefore(currentYearStart);
                 })
                 .count();
-        
-        // Calculate review count for current user
+
         Integer reviewsCount = (int) bookReviewRepository.countByUserIdAndStatus(user.getId(), ReviewStatus.published);
 
-        // Fetch top genres by read book IDs
         List<GenreCountDTO> topGenres = new ArrayList<>();
         if (!readBooksMap.isEmpty()) {
             topGenres = genreRepository.findTopGenresByBookIds(new ArrayList<>(readBooksMap.keySet()), PageRequest.of(0, 5))
@@ -222,17 +258,9 @@ public class UserProfileServiceImpl implements IUserProfileService {
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
 
         Long friendsCount = (long) friendshipRepository.findFriendsByUserId(user.getId()).size();
-
-        // Lists shared with me (received from friends)
         Long listsSharedByFriends = (long) userListShareRepository.findByReceiverIdAndIsActiveTrue(user.getId()).size();
-
-        // Lists I've shared with friends (as the owner/sender)
         Long listsIShared = (long) userListShareRepository.findByOwnerIdAndIsActiveTrue(user.getId()).size();
-
-        // Books I've shared with friends (as sender)
         Long booksSharedWithFriends = (long) bookShareRepository.findBySenderId(user.getId()).size();
-
-        // Books shared by friends with me (as receiver)
         Long booksSharedByFriends = (long) bookShareRepository.findByReceiverId(user.getId()).size();
 
         return new SocialStatisticsDTO(
@@ -241,39 +269,8 @@ public class UserProfileServiceImpl implements IUserProfileService {
                 listsIShared,
                 booksSharedWithFriends,
                 booksSharedByFriends,
-                java.time.Instant.now()
+                Instant.now()
         );
-    }
-
-    private FriendshipStatus determineFriendshipStatus(User profileUser, User currentUser) {
-        if (currentUser == null) {
-            return FriendshipStatus.NONE;
-        }
-
-        if (profileUser.getId().equals(currentUser.getId())) {
-            return FriendshipStatus.SELF;
-        }
-
-        Optional<Friendship> friendship = friendshipRepository.findByUsers(
-                profileUser.getId(),
-                currentUser.getId()
-        );
-
-        if (friendship.isPresent()) {
-            return FriendshipStatus.ACCEPTED;
-        }
-
-        Optional<FriendshipRequest> request = friendshipRequestRepository
-                .findPendingRequestBetween(
-                        currentUser.getId(),
-                        profileUser.getId()
-                );
-
-        if (request.isPresent()) {
-            return FriendshipStatus.PENDING;
-        }
-
-        return FriendshipStatus.NONE;
     }
 
     @Transactional(readOnly = true)
@@ -281,125 +278,166 @@ public class UserProfileServiceImpl implements IUserProfileService {
         User profileUser = userRepository.findByUsernameIgnoreCase(usernameSlug)
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
 
-        // Check if current user is friends with the profile user
-        if (currentUser == null) {
-            return new ArrayList<>();
-        }
+        if (currentUser == null) return new ArrayList<>();
+
         if (!currentUser.getId().equals(profileUser.getId())) {
             boolean areFriends = friendshipRepository.findByUsers(profileUser.getId(), currentUser.getId()).isPresent();
-            if (!areFriends) {
-                return new ArrayList<>();
-            }
+            if (!areFriends) return new ArrayList<>();
         }
+
+        UserPrivacySettings privacy = getOrCreatePrivacySettings(profileUser.getId());
+        boolean isSelf = currentUser.getId().equals(profileUser.getId());
+        boolean friendOfFriend = isFriend(currentUser.getId(), profileUser.getId());
 
         List<FriendActivityDTO> activities = new ArrayList<>();
         PageRequest pageRequest = PageRequest.of(0, 10);
 
-        // Get recent reviews
-        List<BookReview> reviews = bookReviewRepository.findRecentByUserIdsAndStatus(
-                List.of(profileUser.getId()), ReviewStatus.published, pageRequest);
+        boolean showReviews = isSelf || privacy.getReviewsVisibility() == Visibility.PUBLIC
+                || (privacy.getReviewsVisibility() == Visibility.FRIENDS && friendOfFriend);
+        boolean showActivity = isSelf || privacy.getReadingListsActivityVisibility() == Visibility.PUBLIC
+                || (privacy.getReadingListsActivityVisibility() == Visibility.FRIENDS && friendOfFriend);
 
-        for (BookReview review : reviews) {
-            activities.add(new FriendActivityDTO(
-                    review.getId(),
-                    review.getUser().getId(),
-                    review.getUser().getFullName(),
-                    "BOOK_REVIEWED",
-                    review.getCreatedAt(),
-                    review.getEditedAt() != null ? review.getEditedAt() : review.getCreatedAt(),
-                    review.getBook().getId(),
-                    review.getBook().getTitle(),
-                    review.getBook().getIsbn().toString(),
-                    review.getBook().getCoverUrl(),
-                    review.getBook().getAuthors().stream().map(author -> author.getName()).toList(),
-                    review.getRating() != null ? review.getRating().intValue() : null,
-                    review.getReviewText(),
-                    review.getStatus().name(),
-                    0, // BookReview doesn't have helpfulCount field
-                    null, // listId
-                    null, // listName
-                    null, // isPublic
-                    null, // publicToken
-                    null  // visibility
-            ));
+        if (showReviews) {
+            List<BookReview> reviews = bookReviewRepository.findRecentByUserIdsAndStatus(
+                    List.of(profileUser.getId()), ReviewStatus.published, pageRequest);
+            for (BookReview review : reviews) {
+                activities.add(new FriendActivityDTO(
+                        review.getId(),
+                        review.getUser().getId(),
+                        review.getUser().getFullName(),
+                        "BOOK_REVIEWED",
+                        review.getCreatedAt(),
+                        review.getEditedAt() != null ? review.getEditedAt() : review.getCreatedAt(),
+                        review.getBook().getId(),
+                        review.getBook().getTitle(),
+                        review.getBook().getIsbn().toString(),
+                        review.getBook().getCoverUrl(),
+                        review.getBook().getAuthors().stream().map(author -> author.getName()).toList(),
+                        review.getRating() != null ? review.getRating().intValue() : null,
+                        review.getReviewText(),
+                        review.getStatus().name(),
+                        0, null, null, null, null, null
+                ));
+            }
         }
 
-        // Get recent book additions to lists
-        List<UserListBook> listBooks = userListBookRepository.findRecentByUserIds(
-                List.of(profileUser.getId()), pageRequest);
-
-        // Filter out LISTED lists that are not shared with current user
-        if (currentUser != null) {
+        if (showActivity) {
+            List<UserListBook> listBooks = userListBookRepository.findRecentByUserIds(List.of(profileUser.getId()), pageRequest);
             listBooks = listBooks.stream()
                     .filter(listBook -> {
-                        // Allow PUBLIC lists and lists owned by current user
-                        if (listBook.getUserList().getVisibility() == ListVisibility.PUBLIC || 
-                            listBook.getUserList().getUser().getId().equals(currentUser.getId())) {
-                            return true;
-                        }
-                        // For LISTED lists, only allow if shared with current user
+                        if (listBook.getUserList().getVisibility() == ListVisibility.PUBLIC ||
+                            listBook.getUserList().getUser().getId().equals(currentUser.getId())) return true;
                         if (listBook.getUserList().getVisibility() == ListVisibility.LISTED) {
                             return userListShareRepository.findByListIdAndReceiverIdAndIsActiveTrue(
                                     listBook.getUserList().getId(), currentUser.getId()).isPresent();
                         }
-                        // PRIVATE lists are never shown
                         return false;
                     })
                     .toList();
-        }
 
-        for (UserListBook listBook : listBooks) {
-            // Get token based on list visibility
-            String publicToken = null;
-            try {
+            for (UserListBook listBook : listBooks) {
+                String publicToken = null;
                 if (listBook.getUserList().getVisibility() == ListVisibility.PUBLIC) {
-                    // Try to find public link for PUBLIC lists
                     UserListShareLink link = userListShareLinkRepository.findByListId(listBook.getUserList().getId()).orElse(null);
-                    if (link != null && link.isActive()) {
-                        publicToken = link.getPublicToken();
-                    }
+                    if (link != null && link.isActive()) publicToken = link.getPublicToken();
                 } else if (listBook.getUserList().getVisibility() == ListVisibility.LISTED) {
-                    // Try to find share token for LISTED lists shared with current user
-                    if (currentUser != null) {
-                        UserListShare share = userListShareRepository.findByListIdAndReceiverIdAndIsActiveTrue(
-                                listBook.getUserList().getId(), currentUser.getId()).orElse(null);
-                        if (share != null && share.getShareToken() != null) {
-                            publicToken = share.getShareToken();
-                        }
-                    }
+                    UserListShare share = userListShareRepository.findByListIdAndReceiverIdAndIsActiveTrue(
+                            listBook.getUserList().getId(), currentUser.getId()).orElse(null);
+                    if (share != null && share.getShareToken() != null) publicToken = share.getShareToken();
                 }
-            } catch (Exception e) {
-                // If repository not available or error, keep publicToken as null
-                publicToken = null;
+
+                activities.add(new FriendActivityDTO(
+                        listBook.getId(),
+                        listBook.getUserList().getUser().getId(),
+                        listBook.getUserList().getUser().getFullName(),
+                        "BOOK_ADDED_TO_LIST",
+                        listBook.getAddedAt(),
+                        listBook.getAddedAt(),
+                        listBook.getBook().getId(),
+                        listBook.getBook().getTitle(),
+                        listBook.getBook().getIsbn().toString(),
+                        listBook.getBook().getCoverUrl(),
+                        listBook.getBook().getAuthors().stream().map(author -> author.getName()).toList(),
+                        null, null, null, null,
+                        listBook.getUserList().getId(),
+                        listBook.getUserList().getName(),
+                        listBook.getUserList().getVisibility() == ListVisibility.PUBLIC,
+                        publicToken,
+                        listBook.getUserList().getVisibility().name()
+                ));
             }
-            
-            activities.add(new FriendActivityDTO(
-                    listBook.getId(),
-                    listBook.getUserList().getUser().getId(),
-                    listBook.getUserList().getUser().getFullName(),
-                    "BOOK_ADDED_TO_LIST",
-                    listBook.getAddedAt(),
-                    listBook.getAddedAt(),
-                    listBook.getBook().getId(),
-                    listBook.getBook().getTitle(),
-                    listBook.getBook().getIsbn().toString(),
-                    listBook.getBook().getCoverUrl(),
-                    listBook.getBook().getAuthors().stream().map(author -> author.getName()).toList(),
-                    null, // rating
-                    null, // reviewText
-                    null, // status
-                    null, // helpfulCount
-                    listBook.getUserList().getId(),
-                    listBook.getUserList().getName(),
-                    listBook.getUserList().getVisibility().name().equals("PUBLIC"),
-                    publicToken,
-                    listBook.getUserList().getVisibility().name()
-            ));
         }
 
-        // Sort by creation date (most recent first)
         activities.sort((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()));
-
         return activities;
+    }
+
+    // --- private helpers ---
+
+    private UserPrivacySettings getOrCreatePrivacySettings(Long userId) {
+        return privacyRepository.findByUserId(userId)
+                .orElseGet(() -> {
+                    User user = userRepository.findById(userId)
+                            .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
+                    UserPrivacySettings settings = new UserPrivacySettings(user);
+                    return privacyRepository.save(settings);
+                });
+    }
+
+    private FriendshipStatus determineFriendshipStatus(User profileUser, User currentUser) {
+        if (currentUser == null) return FriendshipStatus.NONE;
+        if (profileUser.getId().equals(currentUser.getId())) return FriendshipStatus.SELF;
+        if (friendshipRepository.findByUsers(profileUser.getId(), currentUser.getId()).isPresent()) return FriendshipStatus.ACCEPTED;
+        if (friendshipRequestRepository.findPendingRequestBetween(currentUser.getId(), profileUser.getId()).isPresent()) return FriendshipStatus.PENDING;
+        return FriendshipStatus.NONE;
+    }
+
+    private boolean isFriend(Long userId1, Long userId2) {
+        return friendshipRepository.findByUsers(userId1, userId2).isPresent();
+    }
+
+    private List<UserProfileDTO.BookSummaryDTO> getRecentReviews(Long userId) {
+        List<BookReview> reviews = bookReviewRepository.findRecentByUserIdsAndStatus(
+                List.of(userId), ReviewStatus.published, PageRequest.of(0, 5));
+        return reviews.stream()
+                .map(r -> new UserProfileDTO.BookSummaryDTO(
+                        r.getBook().getId(),
+                        r.getBook().getTitle(),
+                        r.getBook().getCoverUrl(),
+                        r.getReviewText(),
+                        r.getCreatedAt()))
+                .toList();
+    }
+
+    private List<UserProfileDTO.ReadingListSummaryDTO> getReadingLists(Long profileUserId, User currentUser) {
+        boolean isSelf = currentUser != null && currentUser.getId().equals(profileUserId);
+        List<com.lectuaria.backend.model.list.UserList> lists = userListRepository.findByUserIdOrderByCreatedAtAsc(profileUserId);
+
+        return lists.stream()
+                .filter(list -> {
+                    if (isSelf) return true;
+                    if (list.getVisibility() == ListVisibility.PUBLIC) return true;
+                    if (list.getVisibility() == ListVisibility.LISTED && currentUser != null) {
+                        return userListShareRepository.findByListIdAndReceiverIdAndIsActiveTrue(list.getId(), currentUser.getId()).isPresent();
+                    }
+                    return false;
+                })
+                .map(list -> new UserProfileDTO.ReadingListSummaryDTO(
+                        list.getId(),
+                        list.getName(),
+                        list.getDescription(),
+                        list.getVisibility().name(),
+                        (int) userListBookRepository.countByUserListId(list.getId())))
+                .collect(java.util.stream.Collectors.toList());
+    }
+
+    private List<UserProfileDTO.FriendSummaryDTO> getFriends(Long userId) {
+        List<Friendship> friendships = friendshipRepository.findFriendsByUserId(userId);
+        return friendships.stream()
+                .map(f -> {
+                    User friend = f.getUser1().getId().equals(userId) ? f.getUser2() : f.getUser1();
+                    return new UserProfileDTO.FriendSummaryDTO(friend.getId(), friend.getUsername(), friend.getFullName(), friend.getPhotoUrl());
+                })
+                .toList();
     }
 }
