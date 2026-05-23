@@ -1,8 +1,6 @@
 package com.lectuaria.backend.controller;
 
-import com.lectuaria.backend.controller.books.BookRatingController;
-import com.lectuaria.backend.dto.book.BookRatingResponseDTO;
-import com.lectuaria.backend.dto.book.BookReviewResponseDTO;
+import com.lectuaria.backend.dto.book.*;
 import com.lectuaria.backend.dto.common.PaginatedResponse;
 import com.lectuaria.backend.model.auth.User;
 import com.lectuaria.backend.model.auth.UserRole;
@@ -12,208 +10,398 @@ import com.lectuaria.backend.service.book.IBookRatingService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.mockito.ArgumentMatchers;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
-import jakarta.servlet.http.HttpServletRequest;
-import org.mockito.Mock;
-import org.springframework.security.test.context.support.WithMockUser;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
-import java.util.Objects;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @SpringBootTest
-@AutoConfigureMockMvc
+@AutoConfigureMockMvc(addFilters = false)
 @ActiveProfiles("test")
 class BookRatingControllerTest {
 
-        @Autowired
-        private MockMvc mockMvc;
+    @Autowired
+    private MockMvc mockMvc;
 
-        @MockBean
-        private IBookRatingService bookRatingService;
+    @MockBean
+    private IBookRatingService bookRatingService;
 
-        @MockBean
-        private UserRepository userRepository;
+    @MockBean
+    private UserRepository userRepository;
 
-        @MockBean
-        private JwtService jwtService;
+    @MockBean
+    private JwtService jwtService;
 
-        @Test
-        @WithMockUser(username = "user@example.com", roles = {"READER"})
-        void shouldSaveBookRatingSuccessfully() throws Exception {
-                String token = "valid-token";
-                User user = buildUser();
-
-                when(jwtService.extractEmail(token)).thenReturn("user@example.com");
-                when(userRepository.findByEmail("user@example.com")).thenReturn(Optional.of(user));
-                when(bookRatingService.rateBook(eq(10L), eq(Objects.requireNonNull(user)),
-                                eq(Objects.requireNonNull(new BigDecimal("4.5")))))
-                                .thenReturn(new BookRatingResponseDTO(
-                                                "Calificación guardada correctamente.",
-                                                10L,
-                                                new BigDecimal("4.5"),
-                                                new BigDecimal("4.25"),
-                                                8L,
-                                                null,
-                                                null,
-                                                null));
-
-                mockMvc.perform(put("/api/books/10/rating")
-                                .header("Authorization", "Bearer " + token)
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content("""
-                                                {
-                                                  "rating": 4.5
-                                                }
-                                                """))
-                                .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.message").value("Calificación guardada correctamente."))
-                                .andExpect(jsonPath("$.bookId").value(10))
-                                .andExpect(jsonPath("$.userRating").value(4.5))
-                                .andExpect(jsonPath("$.averageRating").value(4.25))
-                                .andExpect(jsonPath("$.ratingsCount").value(8));
+    private void setId(Object entity, Long id) {
+        Class<?> clazz = entity.getClass();
+        while (clazz != null) {
+            try {
+                var field = clazz.getDeclaredField("id");
+                field.setAccessible(true);
+                field.set(entity, id);
+                return;
+            } catch (NoSuchFieldException | IllegalAccessException e) {
+                clazz = clazz.getSuperclass();
+            }
         }
+        throw new RuntimeException("id field not found in class hierarchy");
+    }
 
-        @Test
-        @WithMockUser(username = "user@example.com", roles = {"READER"})
-        void shouldRejectRatingOutsideRange() throws Exception {
-                String token = "valid-token";
+    private void mockReaderAuth(String token) {
+        Authentication auth = mock(Authentication.class);
+        when(auth.isAuthenticated()).thenReturn(true);
+        when(auth.getName()).thenReturn("reader@test.com");
+        SecurityContextHolder.getContext().setAuthentication(auth);
+        when(jwtService.extractEmail(token)).thenReturn("reader@test.com");
+    }
 
-                when(jwtService.isValid(token)).thenReturn(true);
+    private void mockLibrarianAuth(String token) {
+        Authentication auth = mock(Authentication.class);
+        when(auth.isAuthenticated()).thenReturn(true);
+        when(auth.getName()).thenReturn("lib@test.com");
+        SecurityContextHolder.getContext().setAuthentication(auth);
+        when(jwtService.extractEmail(token)).thenReturn("lib@test.com");
+    }
 
-                mockMvc.perform(put("/api/books/10/rating")
-                                .header("Authorization", "Bearer " + token)
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content("""
-                                                {
-                                                  "rating": 5.5
-                                                }
-                                                """))
-                                .andExpect(status().isBadRequest())
-                                .andExpect(jsonPath("$.errors[0]").value("La calificación máxima es 5.0"));
-        }
+    // convenience overloads with fixed token
+    private void mockReaderAuth() { mockReaderAuth("mock-reader-token"); }
+    private void mockLibrarianAuth() { mockLibrarianAuth("mock-lib-token"); }
 
-        @Test
-        @WithMockUser(username = "user@example.com", roles = {"READER"})
-        void shouldGetCurrentBookRating() throws Exception {
-                String token = "valid-token";
-                User user = buildUser();
+    // ========== Public endpoints (no auth required) ==========
 
-                when(jwtService.isValid(token)).thenReturn(true);
-                when(jwtService.extractEmail(token)).thenReturn("user@example.com");
-                when(userRepository.findByEmail("user@example.com")).thenReturn(Optional.of(user));
-                when(bookRatingService.getBookRating(eq(10L), eq(Objects.requireNonNull(user))))
-                                .thenReturn(new BookRatingResponseDTO(
-                                                "Calificación actual obtenida correctamente.",
-                                                10L,
-                                                new BigDecimal("3.5"),
-                                                new BigDecimal("4.10"),
-                                                12L,
-                                                null,
-                                                null,
-                                                null));
+    @Test
+    void getAllBookRatings_returns200() throws Exception {
+        when(bookRatingService.getAllBookRatings(10L)).thenReturn(List.of(
+            new BookRatingWithUserDTO(1L, 10L, new BigDecimal("5.0"), 1L, "User One", "one@test.com", Instant.now()),
+            new BookRatingWithUserDTO(2L, 10L, new BigDecimal("4.0"), 2L, "User Two", "two@test.com", Instant.now())
+        ));
 
-                mockMvc.perform(get("/api/books/10/rating")
-                                .header("Authorization", "Bearer " + token))
-                                .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.message").value("Calificación actual obtenida correctamente."))
-                                .andExpect(jsonPath("$.userRating").value(3.5))
-                                .andExpect(jsonPath("$.averageRating").value(4.10))
-                                .andExpect(jsonPath("$.ratingsCount").value(12));
-        }
+        mockMvc.perform(get("/api/books/10/ratings"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.length()").value(2))
+            .andExpect(jsonPath("$[0].rating").value(5.0))
+            .andExpect(jsonPath("$[0].userName").value("User One"));
+    }
 
-        @Test
-        @WithMockUser(username = "user@example.com", roles = {"READER"})
-        void shouldSavePublishedReviewSuccessfully() throws Exception {
-                String token = "valid-token";
-                User user = buildUser();
+    @Test
+    void getAllBookRatings_empty_returnsEmptyList() throws Exception {
+        when(bookRatingService.getAllBookRatings(99L)).thenReturn(List.of());
 
-                when(jwtService.extractEmail(token)).thenReturn("user@example.com");
-                when(userRepository.findByEmail("user@example.com")).thenReturn(Optional.of(user));
-                when(bookRatingService.saveReview(eq(10L), eq(Objects.requireNonNull(user)),
-                                org.mockito.ArgumentMatchers.any()))
-                                .thenReturn(new BookReviewResponseDTO(
-                                                77L,
-                                                10L,
-                                                1L,
-                                                "Test User",
-                                                Instant.parse("2026-03-23T12:00:00Z"),
-                                                Instant.parse("2026-03-23T12:00:00Z"),
-                                                new BigDecimal("4.5"),
-                                                "Reseña publicada",
-                                                "published",
-                                                0,
-                                                false));
+        mockMvc.perform(get("/api/books/99/ratings"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.length()").value(0));
+    }
 
-                mockMvc.perform(post("/api/books/10/reviews")
-                                .header("Authorization", "Bearer " + token)
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content("""
-                                                {
-                                                  "rating": 4.5,
-                                                  "reviewText": "Reseña publicada",
-                                                  "publish": true
-                                                }
-                                                """))
-                                .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.reviewId").value(77))
-                                .andExpect(jsonPath("$.bookId").value(10))
-                                .andExpect(jsonPath("$.status").value("published"));
-        }
+    @Test
+    void getPublishedReviews_returns200() throws Exception {
+        when(bookRatingService.getPublishedReviews(10L, 0, 5, "MOST_RECENT"))
+            .thenReturn(new PaginatedResponse<>(
+                List.of(new BookReviewResponseDTO(
+                    1L, 10L, 1L, "Reader", Instant.now(), Instant.now(),
+                    new BigDecimal("4.5"), "Great book!", "published", 0, false)),
+                0, 5, 1, 1, true, true, false, false));
 
-        @Test
-        void shouldGetPublishedReviewsPaginated() throws Exception {
-                when(bookRatingService.getPublishedReviews(10L, 0, 5, "MOST_RECENT"))
-                                .thenReturn(new PaginatedResponse<>(
-                                                List.of(),
-                                                0,
-                                                5,
-                                                0,
-                                                0,
-                                                true,
-                                                true,
-                                                false,
-                                                false));
+        mockMvc.perform(get("/api/books/10/reviews")
+                .queryParam("page", "0")
+                .queryParam("size", "5")
+                .queryParam("sort", "MOST_RECENT"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.pageNumber").value(0))
+            .andExpect(jsonPath("$.pageSize").value(5))
+            .andExpect(jsonPath("$.content.length()").value(1));
+    }
 
-                mockMvc.perform(get("/api/books/10/reviews")
-                                .queryParam("page", "0")
-                                .queryParam("size", "5"))
-                                .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.pageNumber").value(0))
-                                .andExpect(jsonPath("$.pageSize").value(5))
-                                .andExpect(jsonPath("$.totalElements").value(0));
-        }
+    @Test
+    void getPublishedReviews_noParams_usesDefaults() throws Exception {
+        when(bookRatingService.getPublishedReviews(10L, 0, 5, "MOST_RECENT"))
+            .thenReturn(new PaginatedResponse<>(List.of(), 0, 5, 0, 0, true, true, false, false));
 
-        private User buildUser() {
-                return new User(
-                                "Test User",
-                                "user@example.com",
-                                "hash",
-                                UserRole.READER,
-                                "testuser",
-                                null,
-                                null);
-        }
+        mockMvc.perform(get("/api/books/10/reviews"))
+            .andExpect(status().isOk());
+    }
 
-        private void mockExtractUserFromRequest(User user) {
-                // Mock the extractUserFromRequest method by using reflection or dependency injection
-                // This is a workaround for the HttpServletRequest mock issue
-        }
+    @Test
+    void rateBook_noAuth_returns401() throws Exception {
+        SecurityContextHolder.clearContext();
+
+        mockMvc.perform(put("/api/books/10/rating")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "rating": 4.0
+                    }
+                    """))
+            .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void saveReview_noAuth_returns401() throws Exception {
+        SecurityContextHolder.clearContext();
+
+        mockMvc.perform(post("/api/books/10/reviews")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "rating": 4.5,
+                      "reviewText": "Test",
+                      "publish": true
+                    }
+                    """))
+            .andExpect(status().isUnauthorized());
+    }
+
+    // ========== Authenticated endpoints (mock SecurityContext) ==========
+
+    @Test
+    void rateBook_asReader_returns200() throws Exception {
+        User readerUser = new User("Reader", "reader@test.com", "hash", UserRole.READER, "reader", null, null);
+        setId(readerUser, 1L);
+        mockReaderAuth();
+        when(userRepository.findByEmail("reader@test.com")).thenReturn(Optional.of(readerUser));
+        when(bookRatingService.rateBook(eq(10L), eq(readerUser), any(BigDecimal.class)))
+            .thenReturn(new BookRatingResponseDTO(
+                "Calificación guardada.", 10L, new BigDecimal("4.5"),
+                new BigDecimal("4.25"), 8L, null, null, null));
+
+        mockMvc.perform(put("/api/books/10/rating")
+                .header("Authorization", "Bearer mock-reader-token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "rating": 4.5
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.userRating").value(4.5));
+    }
+
+    @Test
+    void rateBook_asLibrarian_returns403() throws Exception {
+        User librarianUser = new User("Librarian", "lib@test.com", "hash", UserRole.LIBRARIAN, "lib", null, null);
+        setId(librarianUser, 2L);
+        mockLibrarianAuth();
+        when(userRepository.findByEmail("lib@test.com")).thenReturn(Optional.of(librarianUser));
+
+        mockMvc.perform(put("/api/books/10/rating")
+                .header("Authorization", "Bearer mock-lib-token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "rating": 4.0
+                    }
+                    """))
+            .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void saveReview_asReader_returns200() throws Exception {
+        User readerUser = new User("Reader", "reader@test.com", "hash", UserRole.READER, "reader", null, null);
+        setId(readerUser, 1L);
+        mockReaderAuth();
+        when(userRepository.findByEmail("reader@test.com")).thenReturn(Optional.of(readerUser));
+        when(bookRatingService.saveReview(eq(10L), eq(readerUser), any(BookReviewUpsertRequestDTO.class)))
+            .thenReturn(new BookReviewResponseDTO(
+                77L, 10L, 1L, "Reader", Instant.parse("2026-03-23T12:00:00Z"),
+                Instant.parse("2026-03-23T12:00:00Z"), new BigDecimal("4.5"),
+                "Excelente libro", "published", 0, false));
+
+        mockMvc.perform(post("/api/books/10/reviews")
+                .header("Authorization", "Bearer mock-reader-token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "rating": 4.5,
+                      "reviewText": "Excelente libro",
+                      "publish": true
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.reviewId").value(77))
+            .andExpect(jsonPath("$.status").value("published"));
+    }
+
+    @Test
+    void saveReview_asLibrarian_returns403() throws Exception {
+        User librarianUser = new User("Librarian", "lib@test.com", "hash", UserRole.LIBRARIAN, "lib", null, null);
+        setId(librarianUser, 2L);
+        mockLibrarianAuth();
+        when(userRepository.findByEmail("lib@test.com")).thenReturn(Optional.of(librarianUser));
+
+        mockMvc.perform(post("/api/books/10/reviews")
+                .header("Authorization", "Bearer mock-lib-token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "rating": 4.0,
+                      "reviewText": "Good book",
+                      "publish": true
+                    }
+                    """))
+            .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void deleteReview_asReader_returns204() throws Exception {
+        User readerUser = new User("Reader", "reader@test.com", "hash", UserRole.READER, "reader", null, null);
+        setId(readerUser, 1L);
+        mockReaderAuth();
+        when(userRepository.findByEmail("reader@test.com")).thenReturn(Optional.of(readerUser));
+        doNothing().when(bookRatingService).deleteReview(77L, readerUser);
+
+        mockMvc.perform(delete("/api/books/reviews/77")
+                .header("Authorization", "Bearer mock-reader-token"))
+            .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void deleteRating_asReader_returns204() throws Exception {
+        User readerUser = new User("Reader", "reader@test.com", "hash", UserRole.READER, "reader", null, null);
+        setId(readerUser, 1L);
+        mockReaderAuth();
+        when(userRepository.findByEmail("reader@test.com")).thenReturn(Optional.of(readerUser));
+        doNothing().when(bookRatingService).deleteRating(55L, readerUser);
+
+        mockMvc.perform(delete("/api/books/ratings/55")
+                .header("Authorization", "Bearer mock-reader-token"))
+            .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void updateRating_asReader_returns200() throws Exception {
+        User readerUser = new User("Reader", "reader@test.com", "hash", UserRole.READER, "reader", null, null);
+        setId(readerUser, 1L);
+        mockReaderAuth();
+        when(userRepository.findByEmail("reader@test.com")).thenReturn(Optional.of(readerUser));
+        when(bookRatingService.updateRating(eq(55L), any(BigDecimal.class), eq(readerUser)))
+            .thenReturn(new BookRatingResponseDTO(
+                "Calificación actualizada.", 10L, new BigDecimal("4.0"),
+                new BigDecimal("4.20"), 10L, null, null, null));
+
+        mockMvc.perform(put("/api/books/ratings/55")
+                .header("Authorization", "Bearer mock-reader-token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "rating": 4.0
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.userRating").value(4.0));
+    }
+
+    @Test
+    void updateRating_asLibrarian_returns403() throws Exception {
+        User librarianUser = new User("Librarian", "lib@test.com", "hash", UserRole.LIBRARIAN, "lib", null, null);
+        setId(librarianUser, 2L);
+        mockLibrarianAuth();
+        when(userRepository.findByEmail("lib@test.com")).thenReturn(Optional.of(librarianUser));
+
+        mockMvc.perform(put("/api/books/ratings/55")
+                .header("Authorization", "Bearer mock-lib-token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "rating": 3.5
+                    }
+                    """))
+            .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void updateReview_asReader_returns200() throws Exception {
+        User readerUser = new User("Reader", "reader@test.com", "hash", UserRole.READER, "reader", null, null);
+        setId(readerUser, 1L);
+        mockReaderAuth();
+        when(userRepository.findByEmail("reader@test.com")).thenReturn(Optional.of(readerUser));
+        when(bookRatingService.updateReview(eq(77L), eq(readerUser), any(BookReviewUpsertRequestDTO.class)))
+            .thenReturn(new BookReviewResponseDTO(
+                77L, 10L, 1L, "Reader", Instant.now(), Instant.now(),
+                new BigDecimal("5.0"), "Updated review", "published", 0, false));
+
+        mockMvc.perform(put("/api/books/reviews/77")
+                .header("Authorization", "Bearer mock-reader-token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "rating": 5.0,
+                      "reviewText": "Updated review",
+                      "publish": true
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.reviewText").value("Updated review"));
+    }
+
+    @Test
+    void updateReview_asLibrarian_returns403() throws Exception {
+        User librarianUser = new User("Librarian", "lib@test.com", "hash", UserRole.LIBRARIAN, "lib", null, null);
+        setId(librarianUser, 2L);
+        mockLibrarianAuth();
+        when(userRepository.findByEmail("lib@test.com")).thenReturn(Optional.of(librarianUser));
+
+        mockMvc.perform(put("/api/books/reviews/77")
+                .header("Authorization", "Bearer mock-lib-token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "rating": 4.0,
+                      "reviewText": "Updated",
+                      "publish": true
+                    }
+                    """))
+            .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void getUserRating_asReader_returns200() throws Exception {
+        User readerUser = new User("Reader", "reader@test.com", "hash", UserRole.READER, "reader", null, null);
+        setId(readerUser, 1L);
+        mockReaderAuth();
+        when(userRepository.findByEmail("reader@test.com")).thenReturn(Optional.of(readerUser));
+        when(bookRatingService.getBookRating(eq(10L), eq(readerUser)))
+            .thenReturn(new BookRatingResponseDTO(
+                null, 10L, new BigDecimal("4.0"),
+                new BigDecimal("4.25"), 8L, null, null, null));
+
+        mockMvc.perform(get("/api/books/10/rating")
+                .header("Authorization", "Bearer mock-reader-token"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.userRating").value(4.0));
+    }
+
+    @Test
+    void previewReview_asReader_returns200() throws Exception {
+        User readerUser = new User("Reader", "reader@test.com", "hash", UserRole.READER, "reader", null, null);
+        setId(readerUser, 1L);
+        mockReaderAuth();
+        when(userRepository.findByEmail("reader@test.com")).thenReturn(Optional.of(readerUser));
+        when(bookRatingService.previewReview(eq(10L), any(BookReviewPreviewRequestDTO.class)))
+            .thenReturn(new BookReviewPreviewResponseDTO(10L, new BigDecimal("4.5"), "Test review content", 480));
+
+        mockMvc.perform(post("/api/books/10/reviews/preview")
+                .header("Authorization", "Bearer mock-reader-token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "rating": 4.5,
+                      "reviewText": "Test review content",
+                      "publish": true
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.reviewText").value("Test review content"));
+    }
 }

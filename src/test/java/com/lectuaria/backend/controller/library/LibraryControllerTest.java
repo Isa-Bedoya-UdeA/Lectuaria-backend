@@ -1,5 +1,10 @@
 package com.lectuaria.backend.controller.library;
 
+import com.lectuaria.backend.dto.statistics.LibraryStatisticsDTO;
+import com.lectuaria.backend.dto.statistics.GenreCountDTO;
+import com.lectuaria.backend.dto.statistics.PopularLibraryBookDTO;
+import com.lectuaria.backend.dto.book.BookSummaryDTO;
+import com.lectuaria.backend.dto.book.GenreDTO;
 import com.lectuaria.backend.dto.library.LibrarySummaryDTO;
 import com.lectuaria.backend.model.auth.User;
 import com.lectuaria.backend.model.auth.UserRole;
@@ -14,15 +19,17 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
-import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @SpringBootTest
-@AutoConfigureMockMvc
+@AutoConfigureMockMvc(addFilters = false)
 @ActiveProfiles("test")
 class LibraryControllerTest {
 
@@ -37,6 +44,23 @@ class LibraryControllerTest {
 
     @MockBean
     private UserRepository userRepository;
+
+    private void setId(Object entity, Long id) {
+        Class<?> clazz = entity.getClass();
+        while (clazz != null) {
+            try {
+                var field = clazz.getDeclaredField("id");
+                field.setAccessible(true);
+                field.set(entity, id);
+                return;
+            } catch (NoSuchFieldException | IllegalAccessException e) {
+                clazz = clazz.getSuperclass();
+            }
+        }
+        throw new RuntimeException("id field not found in class hierarchy");
+    }
+
+    // ========== GET /api/libraries ==========
 
     @Test
     void getAllLibraries_returnsListOfLibraries() throws Exception {
@@ -64,7 +88,52 @@ class LibraryControllerTest {
                 .andExpect(jsonPath("$.length()").value(0));
     }
 
-    // Auth-dependent tests use @WithMockUser pattern — see AuthControllerTest
-    // for full JWT token flow tests. LibraryController endpoints that need auth
-    // are covered in integration tests with real security context.
+    // ========== GET /api/libraries/me/statistics ==========
+
+    @Test
+    void getMyLibraryStatistics_validLibrarian_returns200() throws Exception {
+        String token = "valid-librarian-token";
+        User librarianUser = new User("Librarian", "lib@test.com", "hash", UserRole.LIBRARIAN, "lib", null, null);
+        setId(librarianUser, 1L);
+
+        when(jwtService.extractEmail(token)).thenReturn("lib@test.com");
+        when(userRepository.findByEmail("lib@test.com")).thenReturn(Optional.of(librarianUser));
+        when(libraryService.getMyLibraryStatistics(librarianUser))
+                .thenReturn(new LibraryStatisticsDTO(
+                        150L, 10L, List.of(new GenreCountDTO(1L, "Fiction", 45L)),
+                        8L, new BigDecimal("4.2"),
+                        List.of(
+                            new PopularLibraryBookDTO(
+                                new BookSummaryDTO(1L, 1234567890123L, "Title",
+                                    List.of("Author"),
+                                    List.of(new GenreDTO(1L, "Fiction", null)),
+                                    new BigDecimal("4.5"), 10,
+                                    null, null, null, null, Instant.now()),
+                                100L, 5L, 10)),
+                        Instant.now(), Instant.now().plusSeconds(3600)));
+
+        mockMvc.perform(get("/api/libraries/me/statistics")
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalBooks").value(150))
+                .andExpect(jsonPath("$.booksAddedThisMonth").value(10))
+                .andExpect(jsonPath("$.averageRatingOfOwnBooks").value(4.2));
+    }
+
+    @Test
+    void getMyLibraryStatistics_noToken_returns401() throws Exception {
+        when(jwtService.extractEmail(any())).thenThrow(new com.lectuaria.backend.exception.UnauthorizedException("Token requerido"));
+
+        mockMvc.perform(get("/api/libraries/me/statistics"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void getMyLibraryStatistics_invalidToken_returns401() throws Exception {
+        when(jwtService.extractEmail("bad-token")).thenThrow(new com.lectuaria.backend.exception.UnauthorizedException("Token inválido"));
+
+        mockMvc.perform(get("/api/libraries/me/statistics")
+                .header("Authorization", "Bearer bad-token"))
+                .andExpect(status().isUnauthorized());
+    }
 }
