@@ -10,13 +10,13 @@ public interface IBookService {
     PaginatedResponse<BookSummaryDTO> searchBooks(String keyword, int page, int size);
     PaginatedResponse<BookSummaryDTO> getAllBooks(int page, int size, Float minRating, Integer startYear, Integer endYear, List<String> formatTypes, Long userId);
     PaginatedResponse<BookSummaryDTO> getBooksByGenre(Long genreId, int page, int size);
-    PaginatedResponse<BookSummaryDTO> getBooksByLibrary(Long libraryId, int page, int size);
+    PaginatedResponse<BookSummaryDTO> getBooksByLibrary(Long libraryId, int page, int size, String keyword, String sort);
     PaginatedResponse<BookSummaryDTO> getBooksByGenres(List<Long> genreIds, int page, int size);
     PaginatedResponse<BookSummaryDTO> getBooksByGenresWithLibraryInfo(List<Long> genreIds, int page, int size, Long userId);
     PaginatedResponse<BookSummaryDTO> getBooksByAuthor(Long authorId, int page, int size);
     PaginatedResponse<BookSummaryDTO> getMostPopular(int page, int size);
     PaginatedResponse<BookSummaryDTO> getTopRated(int page, int size, Long genreId, Integer year);
-    PaginatedResponse<BookCatalogItemDTO> getNewCatalogBooks(int page, int size, Long genreId, String formatName);
+    PaginatedResponse<BookCatalogItemDTO> getNewCatalogBooks(int page, int size, Long genreId);
     FeaturedSectionsDTO getFeaturedSections();
     List<BookSummaryDTO> getSimilarBooks(Long bookId);
     PaginatedResponse<BookSummaryDTO> getMostPopularWithLibraryInfo(int page, int size, Long userId);

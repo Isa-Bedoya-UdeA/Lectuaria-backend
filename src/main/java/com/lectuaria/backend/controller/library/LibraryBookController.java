@@ -1,11 +1,14 @@
-// src/main/java/com/lectuaria/backend/controller/library/LibraryBookController.java
 package com.lectuaria.backend.controller.library;
 
 import com.lectuaria.backend.dto.book.BulkUploadResultDTO;
+import com.lectuaria.backend.dto.library.LibraryBookAvailabilityDTO;
 import com.lectuaria.backend.exception.UnauthorizedException;
 import com.lectuaria.backend.model.auth.User;
 import com.lectuaria.backend.model.auth.UserRole;
+import com.lectuaria.backend.model.book.LibraryBook;
 import com.lectuaria.backend.repository.auth.UserRepository;
+import com.lectuaria.backend.repository.library.LibrarianRepository;
+import com.lectuaria.backend.repository.library.LibraryBookRepository;
 import com.lectuaria.backend.security.JwtService;
 import com.lectuaria.backend.service.book.IBulkUploadService;
 
@@ -28,21 +31,26 @@ public class LibraryBookController {
     private final UserRepository userRepository;
     private final JwtService jwtService;
     private final IBulkUploadService bulkUploadService;
+    private final LibraryBookRepository libraryBookRepository;
+    private final LibrarianRepository librarianRepository;
 
     public LibraryBookController(
             UserRepository userRepository,
             JwtService jwtService,
-            IBulkUploadService bulkUploadService) {
+            IBulkUploadService bulkUploadService,
+            LibraryBookRepository libraryBookRepository,
+            LibrarianRepository librarianRepository) {
         this.userRepository = userRepository;
         this.jwtService = jwtService;
         this.bulkUploadService = bulkUploadService;
+        this.libraryBookRepository = libraryBookRepository;
+        this.librarianRepository = librarianRepository;
     }
 
     @PostMapping("/bulk-upload")
     public ResponseEntity<BulkUploadResultDTO> bulkUpload(
             @RequestParam("file") MultipartFile file) {
 
-        // Obtener el usuario autenticado desde el contexto de seguridad de Spring
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         logger.info("Bulk upload initiated");
 
@@ -82,5 +90,59 @@ public class LibraryBookController {
                 .body(csv.getBytes());
     }
 
+    /**
+     * Actualiza la disponibilidad de un libro en la biblioteca del bibliotecario autenticado.
+     * El bibliotecario puede editar: copias físicas, disponibilidad digital y plataforma digital.
+     * Solo funciona si el bibliotecario tiene ese libro en SU biblioteca.
+     */
+    @PatchMapping("/{bookId}/availability")
+    public ResponseEntity<LibraryBookAvailabilityDTO> updateAvailability(
+            @PathVariable Long bookId,
+            @RequestBody LibraryBookAvailabilityDTO request,
+            HttpServletRequest httpRequest) {
 
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new UnauthorizedException("Usuario no autenticado");
+        }
+
+        String email = authentication.getName();
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new UnauthorizedException("Usuario no encontrado"));
+
+        if (user.getRole() != UserRole.LIBRARIAN) {
+            throw new UnauthorizedException("Acceso denegado: solo bibliotecarios pueden editar la disponibilidad");
+        }
+
+        // Obtener el libraryId del bibliotecario
+        var librarian = librarianRepository.findByUser(user)
+                .orElseThrow(() -> new UnauthorizedException("Perfil de bibliotecario no encontrado"));
+
+        Long libraryId = librarian.getLibrary().getId();
+
+        // Buscar el LibraryBook que conecta la biblioteca del librarian con el libro
+        LibraryBook libraryBook = libraryBookRepository.findByLibraryIdAndBookId(libraryId, bookId)
+                .orElseThrow(() -> new RuntimeException("Este libro no está en tu biblioteca"));
+
+        // Actualizar solo los campos de disponibilidad
+        if (request.getPhysicalCopies() != null) {
+            libraryBook.setPhysicalCopies(request.getPhysicalCopies());
+        }
+        if (request.getDigitalAvailable() != null) {
+            libraryBook.setDigitalAvailable(request.getDigitalAvailable());
+        }
+        if (request.getDigitalPlatformId() != null) {
+            libraryBook.setDigitalPlatform(request.getDigitalPlatformId());
+        }
+
+        libraryBookRepository.save(libraryBook);
+
+        logger.info("Availability updated for book {} in library {} by user {}", bookId, libraryId, user.getId());
+
+        return ResponseEntity.ok(new LibraryBookAvailabilityDTO(
+                libraryBook.getPhysicalCopies(),
+                libraryBook.getDigitalAvailable(),
+                libraryBook.getDigitalPlatform()
+        ));
+    }
 }

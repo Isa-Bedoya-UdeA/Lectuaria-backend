@@ -6,6 +6,7 @@ public class LibraryAvailabilityDTO {
     private Integer physicalCopies;
     private boolean digitalAvailable;
     private String digitalPlatform;
+    private Long platformId;
 
     public LibraryAvailabilityDTO() {}
 
@@ -32,4 +33,7 @@ public class LibraryAvailabilityDTO {
 
     public String getDigitalPlatform() { return digitalPlatform; }
     public void setDigitalPlatform(String digitalPlatform) { this.digitalPlatform = digitalPlatform; }
+
+    public Long getPlatformId() { return platformId; }
+    public void setPlatformId(Long platformId) { this.platformId = platformId; }
 }

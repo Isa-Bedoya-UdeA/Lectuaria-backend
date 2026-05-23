@@ -130,6 +130,7 @@ public class BookRatingServiceImpl implements IBookRatingService {
         BookRating rating = getRatingOrThrow(ratingId);
         assertOwnership(rating, user, "No puedes actualizar una calificación que no te pertenece");
 
+        BigDecimal oldRatingValue = rating.getRating();
         rating.setRating(normalizeRating(newRating));
         bookRatingRepository.save(rating);
 
@@ -153,14 +154,6 @@ public class BookRatingServiceImpl implements IBookRatingService {
     }
 
     private void deleteRatingInternal(BookRating rating) {
-        try {
-            entityManager.createNativeQuery("DELETE FROM rating_history WHERE id_rating = :ratingId")
-                    .setParameter("ratingId", rating.getId())
-                    .executeUpdate();
-        } catch (Exception ignored) {
-            // Tabla opcional en algunos entornos.
-        }
-
         Book book = rating.getBook();
         bookRatingRepository.delete(rating);
         refreshBookAggregates(book);

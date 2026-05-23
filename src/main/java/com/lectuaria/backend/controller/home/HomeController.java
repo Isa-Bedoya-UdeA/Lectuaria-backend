@@ -35,9 +35,8 @@ public class HomeController {
     @GetMapping
     public ResponseEntity<HomeResponseDTO> getHome(
             @RequestParam(required = false) Long genreId,
-            @RequestParam(required = false) String format,
             HttpServletRequest request) {
-        return ResponseEntity.ok(homeService.getHome(extractUser(request), genreId, format));
+        return ResponseEntity.ok(homeService.getHome(extractUser(request), genreId));
     }
 
     @GetMapping("/recommendations")

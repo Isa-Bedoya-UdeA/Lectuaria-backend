@@ -26,12 +26,10 @@ import com.lectuaria.backend.repository.book.GenreRepository;
 import com.lectuaria.backend.repository.friendship.FriendshipRepository;
 import com.lectuaria.backend.repository.friendship.FriendshipRequestRepository;
 import com.lectuaria.backend.repository.list.UserListBookRepository;
-import com.lectuaria.backend.repository.list.UserListShareLinkRepository;
 import com.lectuaria.backend.repository.list.UserListShareRepository;
 import com.lectuaria.backend.repository.list.UserListRepository;
 import com.lectuaria.backend.repository.book.BookShareRepository;
 import com.lectuaria.backend.repository.user.UserPrivacySettingsRepository;
-import com.lectuaria.backend.model.list.UserListShareLink;
 import com.lectuaria.backend.model.list.UserListShare;
 import com.lectuaria.backend.service.user.IUserProfileService;
 import org.springframework.data.domain.PageRequest;
@@ -58,7 +56,6 @@ public class UserProfileServiceImpl implements IUserProfileService {
     private final BookReviewRepository bookReviewRepository;
     private final BookRatingRepository bookRatingRepository;
     private final UserListBookRepository userListBookRepository;
-    private final UserListShareLinkRepository userListShareLinkRepository;
     private final UserListShareRepository userListShareRepository;
     private final UserListRepository userListRepository;
     private final BookShareRepository bookShareRepository;
@@ -71,7 +68,6 @@ public class UserProfileServiceImpl implements IUserProfileService {
                                    BookReviewRepository bookReviewRepository,
                                    BookRatingRepository bookRatingRepository,
                                    UserListBookRepository userListBookRepository,
-                                   UserListShareLinkRepository userListShareLinkRepository,
                                    UserListShareRepository userListShareRepository,
                                    UserListRepository userListRepository,
                                    BookShareRepository bookShareRepository,
@@ -83,7 +79,6 @@ public class UserProfileServiceImpl implements IUserProfileService {
         this.bookReviewRepository = bookReviewRepository;
         this.bookRatingRepository = bookRatingRepository;
         this.userListBookRepository = userListBookRepository;
-        this.userListShareLinkRepository = userListShareLinkRepository;
         this.userListShareRepository = userListShareRepository;
         this.userListRepository = userListRepository;
         this.bookShareRepository = bookShareRepository;
@@ -337,10 +332,7 @@ public class UserProfileServiceImpl implements IUserProfileService {
 
             for (UserListBook listBook : listBooks) {
                 String publicToken = null;
-                if (listBook.getUserList().getVisibility() == ListVisibility.PUBLIC) {
-                    UserListShareLink link = userListShareLinkRepository.findByListId(listBook.getUserList().getId()).orElse(null);
-                    if (link != null && link.isActive()) publicToken = link.getPublicToken();
-                } else if (listBook.getUserList().getVisibility() == ListVisibility.LISTED) {
+                if (listBook.getUserList().getVisibility() == ListVisibility.LISTED) {
                     UserListShare share = userListShareRepository.findByListIdAndReceiverIdAndIsActiveTrue(
                             listBook.getUserList().getId(), currentUser.getId()).orElse(null);
                     if (share != null && share.getShareToken() != null) publicToken = share.getShareToken();

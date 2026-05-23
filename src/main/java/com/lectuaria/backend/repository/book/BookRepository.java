@@ -55,14 +55,10 @@ public interface BookRepository extends JpaRepository<Book, Long>, JpaSpecificat
 
 	@Query("SELECT DISTINCT b FROM Book b " +
 			"LEFT JOIN b.genres g " +
-			"LEFT JOIN b.formats bf " +
-			"LEFT JOIN bf.format f " +
 			"WHERE b.createdAt >= :since " +
 			"AND (:genreId IS NULL OR g.id = :genreId) " +
-			"AND (:formatName IS NULL OR LOWER(f.name) = LOWER(:formatName)) " +
 			"ORDER BY b.createdAt DESC")
-	Page<Book> findNewCatalogBooks(@Param("since") Instant since, @Param("genreId") Long genreId,
-			@Param("formatName") String formatName, Pageable pageable);
+	Page<Book> findNewCatalogBooks(@Param("since") Instant since, @Param("genreId") Long genreId, Pageable pageable);
 
 	@Query("SELECT DISTINCT b FROM Book b LEFT JOIN b.genres g " +
 			"WHERE b.averageRating >= 4.0 AND b.ratingsCount >= 10 " +

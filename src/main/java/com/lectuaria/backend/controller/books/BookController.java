@@ -167,8 +167,10 @@ public class BookController {
     public ResponseEntity<PaginatedResponse<BookSummaryDTO>> getBooksByLibrary(
             @PathVariable Long libraryId,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "12") int size) {
-        logger.info("BookController: getBooksByLibrary called with libraryId: {}", libraryId);
+            @RequestParam(defaultValue = "12") int size,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String sort) {
+        logger.info("BookController: getBooksByLibrary called with libraryId: {}, keyword: {}, sort: {}", libraryId, keyword, sort);
 
         // Obtener el usuario autenticado desde el contexto de seguridad de Spring
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -209,8 +211,8 @@ public class BookController {
         }
 
         logger.info("BookController: All validations passed, returning books for library: {}", libraryId);
-        // Si todo está bien, retornar los libros
-        return ResponseEntity.ok(bookService.getBooksByLibrary(libraryId, page, size));
+        // Si todo está bien, retornar los libros con búsqueda y ordenamiento opcionales
+        return ResponseEntity.ok(bookService.getBooksByLibrary(libraryId, page, size, keyword, sort));
 
     }
 
@@ -253,9 +255,8 @@ public class BookController {
     public ResponseEntity<PaginatedResponse<BookCatalogItemDTO>> getNewCatalogBooks(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "12") int size,
-            @RequestParam(required = false) Long genreId,
-            @RequestParam(required = false) String format) {
-        return ResponseEntity.ok(bookService.getNewCatalogBooks(page, size, genreId, format));
+            @RequestParam(required = false) Long genreId) {
+        return ResponseEntity.ok(bookService.getNewCatalogBooks(page, size, genreId));
     }
 
     @GetMapping("/featured")

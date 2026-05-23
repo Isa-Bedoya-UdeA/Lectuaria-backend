@@ -6,6 +6,7 @@ import com.lectuaria.backend.exception.UnauthorizedException;
 import com.lectuaria.backend.model.auth.User;
 import com.lectuaria.backend.security.JwtService;
 import com.lectuaria.backend.service.book.IBookPublishService;
+import com.lectuaria.backend.service.storage.S3StorageService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 import com.lectuaria.backend.repository.auth.UserRepository;
 import org.springframework.lang.NonNull;
 
+
 @RestController
 @RequestMapping("/api/books")
 public class BookPublishController {
@@ -23,12 +25,14 @@ public class BookPublishController {
     private final IBookPublishService bookPublishService;
     private final UserRepository userRepository;
     private final JwtService jwtService;
+    private final S3StorageService s3StorageService;
 
     public BookPublishController(IBookPublishService bookPublishService, JwtService jwtService,
-            UserRepository userRepository) {
+            UserRepository userRepository, S3StorageService s3StorageService) {
         this.bookPublishService = bookPublishService;
         this.userRepository = userRepository;
         this.jwtService = jwtService;
+        this.s3StorageService = s3StorageService;
     }
 
     @PostMapping("/publish")
@@ -38,6 +42,30 @@ public class BookPublishController {
 
         // Extraer user ID del token JWT (necesitas implementar este método)
         Long librarianUserId = extractUserIdFromToken(httpRequest);
+
+        BookPublishResponseDTO response = bookPublishService.publishBook(request, librarianUserId);
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/publish-with-cover")
+    public ResponseEntity<BookPublishResponseDTO> publishBookWithCover(
+            @RequestBody BookPublishRequestDTO request,
+            HttpServletRequest httpRequest) throws Exception {
+
+        Long librarianUserId = extractUserIdFromToken(httpRequest);
+
+        // If cover image provided as base64, upload to S3 and set as coverUrl
+        if (request.getCoverUrl() != null && request.getCoverUrl().startsWith("data:")) {
+            // Extract base64 content and mime type from data URI
+            String dataUri = request.getCoverUrl();
+            String mimeType = dataUri.substring("data:".length(), dataUri.indexOf(";"));
+            String base64Data = dataUri.substring(dataUri.indexOf(",") + 1);
+            byte[] imageBytes = java.util.Base64.getDecoder().decode(base64Data);
+            long isbn = request.getIsbn();
+            String coverUrl = s3StorageService.uploadCoverBytes(imageBytes, isbn, mimeType);
+            request.setCoverUrl(coverUrl);
+            LOGGER.info("Cover image uploaded for ISBN {}: {}", isbn, coverUrl);
+        }
 
         BookPublishResponseDTO response = bookPublishService.publishBook(request, librarianUserId);
         return ResponseEntity.ok(response);

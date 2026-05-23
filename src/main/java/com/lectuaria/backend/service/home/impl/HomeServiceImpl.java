@@ -64,10 +64,10 @@ public class HomeServiceImpl implements IHomeService {
         this.userRecommendationRepository = userRecommendationRepository;
     }
 
-    public HomeResponseDTO getHome(User user, Long genreId, String formatName) {
+    public HomeResponseDTO getHome(User user, Long genreId) {
         return new HomeResponseDTO(
                 getFriendActivity(user, 20),
-                bookService.getNewCatalogBooks(0, 12, genreId, formatName).getContent(),
+                bookService.getNewCatalogBooks(0, 12, genreId).getContent(),
                 bookService.getFeaturedSections(),
                 getRecommendations(user, MIN_RECOMMENDATIONS));
     }
@@ -112,8 +112,8 @@ public class HomeServiceImpl implements IHomeService {
 
         List<Book> candidates = genreNames.isEmpty()
                 ? new ArrayList<>()
-                : bookRepository.findRecommendationsByGenreIds(new ArrayList<>(genreNames.keySet()),
-                        PageRequest.of(0, requestedSize * 5));
+                : new ArrayList<>(bookRepository.findRecommendationsByGenreIds(new ArrayList<>(genreNames.keySet()),
+                        PageRequest.of(0, requestedSize * 5)));
 
         if (candidates.size() < requestedSize) {
             candidates.addAll(bookRepository.findFallbackRecommendations(PageRequest.of(0, requestedSize * 5)));
@@ -282,6 +282,7 @@ public class HomeServiceImpl implements IHomeService {
                 book.getCoverUrl(),
                 null,
                 null,
-                book.getCreatedBy() != null ? book.getCreatedBy().getId() : null);
+                book.getCreatedBy() != null ? book.getCreatedBy().getId() : null,
+                book.getCreatedAt());
     }
 }

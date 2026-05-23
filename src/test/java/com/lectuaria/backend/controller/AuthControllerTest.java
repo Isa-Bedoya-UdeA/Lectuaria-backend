@@ -61,7 +61,7 @@ class AuthControllerTest {
         "Inicio de sesión exitoso.",
         "mock-access-token-123",
         "mock-refresh-token-456");
-    when(authService.login(any(LoginRequestDTO.class))).thenReturn(mockLoginResponse);
+    when(authService.login(any(LoginRequestDTO.class), any(String.class))).thenReturn(mockLoginResponse);
 
     // 1. Verificar respuesta de REGISTER
     mockMvc.perform(post("/api/auth/register")
@@ -99,7 +99,7 @@ class AuthControllerTest {
 
   @Test
   void rejectInvalidCredentials() throws Exception {
-    when(authService.login(any(LoginRequestDTO.class)))
+    when(authService.login(any(LoginRequestDTO.class), any(String.class)))
         .thenThrow(new ValidationException(java.util.List.of("Credenciales inválidas.")));
 
     mockMvc.perform(post("/api/auth/login")

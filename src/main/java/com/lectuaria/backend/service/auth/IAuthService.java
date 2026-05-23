@@ -9,7 +9,7 @@ import com.lectuaria.backend.dto.auth.RegisterResponseDTO;
 
 public interface IAuthService {
     RegisterResponseDTO register(RegisterRequestDTO request);
-    LoginResponseDTO login(LoginRequestDTO request);
+    LoginResponseDTO login(LoginRequestDTO request, String ipAddress);
     void logout(String refreshTokenValue);
     LoginResponseDTO refresh(String refreshTokenValue);
     ProfileResponseDTO getProfile(String email);

@@ -29,8 +29,8 @@ public class LibraryBook {
     @Column(name = "digital_available", columnDefinition = "BOOLEAN DEFAULT FALSE")
     private Boolean digitalAvailable = false;
 
-    @Column(name = "digital_platform", length = 100)
-    private String digitalPlatform;
+    @Column(name = "digital_platform")
+    private Long digitalPlatform;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "id_user_added")
@@ -45,7 +45,7 @@ public class LibraryBook {
     }
 
     public LibraryBook(Library library, Book book, Integer physicalCopies,
-            Boolean digitalAvailable, String digitalPlatform, User userAdded) {
+            Boolean digitalAvailable, Long digitalPlatform, User userAdded) {
         this.library = library;
         this.book = book;
         this.physicalCopies = physicalCopies != null ? physicalCopies : 0;
@@ -91,11 +91,11 @@ public class LibraryBook {
         this.digitalAvailable = digitalAvailable;
     }
 
-    public String getDigitalPlatform() {
+    public Long getDigitalPlatform() {
         return digitalPlatform;
     }
 
-    public void setDigitalPlatform(String digitalPlatform) {
+    public void setDigitalPlatform(Long digitalPlatform) {
         this.digitalPlatform = digitalPlatform;
     }
 

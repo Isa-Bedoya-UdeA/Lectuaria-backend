@@ -133,6 +133,12 @@
             <version>${lombok-mapstruct-binding.version}</version>
             <scope>provided</scope>
         </dependency>
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+            <version>2.25.27</version>
+        </dependency>
+        
     </dependencies>
 
     <build>

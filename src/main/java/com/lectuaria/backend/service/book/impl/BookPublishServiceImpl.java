@@ -16,10 +16,12 @@ import com.lectuaria.backend.model.library.Library;
 import com.lectuaria.backend.repository.library.LibrarianRepository;
 import com.lectuaria.backend.repository.library.LibraryBookRepository;
 import com.lectuaria.backend.repository.book.BookRepository;
+import com.lectuaria.backend.repository.book.PlatformRepository;
 import com.lectuaria.backend.repository.book.AuthorRepository;
 import com.lectuaria.backend.repository.book.GenreRepository;
 import com.lectuaria.backend.repository.book.PublisherRepository;
 import com.lectuaria.backend.repository.auth.UserRepository;
+import com.lectuaria.backend.model.book.Platform;
 import com.lectuaria.backend.service.book.externalApi.IExternalBookMetadataService;
 import com.lectuaria.backend.util.ISBNValidator;
 import org.springframework.lang.NonNull;
@@ -35,6 +37,7 @@ import java.util.stream.Collectors;
 public class BookPublishServiceImpl implements IBookPublishService {
 
     private final BookRepository bookRepository;
+    private final PlatformRepository platformRepository;
     private final AuthorRepository authorRepository;
     private final GenreRepository genreRepository;
     private final PublisherRepository publisherRepository;
@@ -44,6 +47,7 @@ public class BookPublishServiceImpl implements IBookPublishService {
     private final IExternalBookMetadataService externalBookMetadataService;
 
     public BookPublishServiceImpl(BookRepository bookRepository,
+            PlatformRepository platformRepository,
             AuthorRepository authorRepository,
             GenreRepository genreRepository,
             PublisherRepository publisherRepository,
@@ -52,6 +56,7 @@ public class BookPublishServiceImpl implements IBookPublishService {
             UserRepository userRepository,
             IExternalBookMetadataService externalBookMetadataService) {
         this.bookRepository = bookRepository;
+        this.platformRepository = platformRepository;
         this.authorRepository = authorRepository;
         this.genreRepository = genreRepository;
         this.publisherRepository = publisherRepository;
@@ -105,7 +110,7 @@ public class BookPublishServiceImpl implements IBookPublishService {
         }
 
         // 7. Asociar libro a la biblioteca (tabla LIBRARY_BOOK)
-        associateBookToLibrary(book, library, request.getAvailability(), librarianUserId);
+        associateBookToLibrary(book, library, request.getAvailability(), librarianUserId, request.getPlatformId());
 
         String message = isNewBook
                 ? "Libro creado y añadido a tu biblioteca exitosamente."
@@ -169,8 +174,7 @@ public class BookPublishServiceImpl implements IBookPublishService {
     }
 
     private void associateBookToLibrary(Book book, Library library,
-            AvailabilityDTO availability, Long userId) {
-        // Verificar si ya existe la asociación (doble chequeo por seguridad)
+            AvailabilityDTO availability, Long userId, Long platformId) {
         if (libraryBookRepository.existsByLibraryIdAndBookId(library.getId(), book.getId())) {
             throw new BookAlreadyExistsInLibraryException(
                     "Este libro ya está registrado en tu biblioteca.");
@@ -181,7 +185,7 @@ public class BookPublishServiceImpl implements IBookPublishService {
         libraryBook.setBook(book);
         libraryBook.setPhysicalCopies(availability.isPhysical() ? availability.getPhysicalCopies() : 0);
         libraryBook.setDigitalAvailable(availability.isDigital());
-        libraryBook.setDigitalPlatform(availability.getDigitalPlatform());
+        libraryBook.setDigitalPlatform(platformId);
         libraryBook.setUserAdded(userId != null ? userRepository.findById(userId).orElse(null) : null);
 
         libraryBookRepository.save(libraryBook);

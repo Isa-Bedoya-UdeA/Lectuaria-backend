@@ -4,7 +4,6 @@ import com.lectuaria.backend.dto.book.BookSummaryDTO;
 import com.lectuaria.backend.dto.book.GenreDTO;
 import com.lectuaria.backend.dto.book.ShareResultDTO;
 import com.lectuaria.backend.dto.list.UserListShareDTO;
-import com.lectuaria.backend.dto.list.UserListShareLinkDTO;
 import com.lectuaria.backend.exception.list.AlreadySharedException;
 import com.lectuaria.backend.exception.list.PrivateListException;
 import com.lectuaria.backend.model.auth.User;
@@ -13,12 +12,10 @@ import com.lectuaria.backend.model.book.Book;
 import com.lectuaria.backend.model.list.ListVisibility;
 import com.lectuaria.backend.model.list.UserList;
 import com.lectuaria.backend.model.list.UserListShare;
-import com.lectuaria.backend.model.list.UserListShareLink;
 import com.lectuaria.backend.model.notification.NotificationType;
 import com.lectuaria.backend.repository.auth.UserRepository;
 import com.lectuaria.backend.repository.list.UserListBookRepository;
 import com.lectuaria.backend.repository.list.UserListRepository;
-import com.lectuaria.backend.repository.list.UserListShareLinkRepository;
 import com.lectuaria.backend.repository.list.UserListShareRepository;
 import com.lectuaria.backend.repository.notification.NotificationRepository;
 import com.lectuaria.backend.service.list.IUserListShareService;
@@ -32,20 +29,22 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+// DESACTIVADO: user_list_share_link fue eliminado de la BD
 @Service
 public class UserListShareServiceImpl implements IUserListShareService {
 
     private final UserListShareRepository shareRepository;
-    private final UserListShareLinkRepository linkRepository;
     private final UserListRepository listRepository;
     private final UserRepository userRepository;
     private final UserListBookRepository listBookRepository;
     private final NotificationRepository notificationRepository;
     private final INotificationService notificationService;
 
-    public UserListShareServiceImpl(UserListShareRepository shareRepository, UserListShareLinkRepository linkRepository, UserListRepository listRepository, UserRepository userRepository, UserListBookRepository listBookRepository, NotificationRepository notificationRepository, INotificationService notificationService) {
+    public UserListShareServiceImpl(UserListShareRepository shareRepository,
+            UserListRepository listRepository, UserRepository userRepository,
+            UserListBookRepository listBookRepository, NotificationRepository notificationRepository,
+            INotificationService notificationService) {
         this.shareRepository = shareRepository;
-        this.linkRepository = linkRepository;
         this.listRepository = listRepository;
         this.userRepository = userRepository;
         this.listBookRepository = listBookRepository;
@@ -69,9 +68,7 @@ public class UserListShareServiceImpl implements IUserListShareService {
 
         UserListShareDTO firstShare = null;
         for (Long friendId : friendIds) {
-            if (friendId.equals(ownerId)) {
-                continue;
-            }
+            if (friendId.equals(ownerId)) continue;
 
             User receiver = userRepository.findById(friendId)
                     .orElseThrow(() -> new RuntimeException("User not found"));
@@ -81,23 +78,15 @@ public class UserListShareServiceImpl implements IUserListShareService {
             }
 
             UserListShare share = new UserListShare(list, list.getUser(), receiver);
-            // Generate unique token for LISTED lists
             if (list.getVisibility() == ListVisibility.LISTED) {
-                String shareToken = generateUniqueToken();
-                share.setShareToken(shareToken);
+                share.setShareToken(UUID.randomUUID().toString());
             }
             share = shareRepository.save(share);
 
-            if (firstShare == null) {
-                firstShare = mapToDTO(share, false);
-            }
+            if (firstShare == null) firstShare = mapToDTO(share, false);
         }
 
         return firstShare;
-    }
-
-    private String generateUniqueToken() {
-        return UUID.randomUUID().toString();
     }
 
     @Override
@@ -121,9 +110,7 @@ public class UserListShareServiceImpl implements IUserListShareService {
         List<String> otherErrors = new ArrayList<>();
 
         for (Long friendId : friendIds) {
-            if (friendId.equals(ownerId)) {
-                continue;
-            }
+            if (friendId.equals(ownerId)) continue;
 
             User receiver = userRepository.findById(friendId)
                     .orElseThrow(() -> new RuntimeException("User not found"));
@@ -137,41 +124,18 @@ public class UserListShareServiceImpl implements IUserListShareService {
             try {
                 UserListShare share = new UserListShare(list, list.getUser(), receiver);
                 if (list.getVisibility() == ListVisibility.LISTED) {
-                    share.setShareToken(generateUniqueToken());
+                    share.setShareToken(UUID.randomUUID().toString());
                 }
-                share = shareRepository.save(share);
+                shareRepository.save(share);
 
                 String notificationMessage = message != null && !message.isEmpty()
                         ? list.getUser().getFullName() + " te ha compartido esta lista: " + list.getName() + " - " + message
                         : list.getUser().getFullName() + " te ha compartido esta lista: " + list.getName();
 
-                // Create notification with shareToken for LISTED lists (to redirect to /shared/token)
-                // For PUBLIC lists, also set shareToken so frontend knows to redirect to shared page
-                if (list.getVisibility() == ListVisibility.LISTED) {
-                    notificationService.createNotificationWithShareToken(
-                        friendId,
-                        NotificationType.SHARED,
-                        notificationMessage,
-                        list.getId(),
-                        share.getShareToken()
-                    );
-                } else {
-                    // For PUBLIC visibility, create a public token and use it
-                    String publicToken = UUID.randomUUID().toString();
-                    notificationService.createNotificationWithShareToken(
-                        friendId,
-                        NotificationType.SHARED,
-                        notificationMessage,
-                        list.getId(),
-                        publicToken
-                    );
+                notificationService.createNotificationWithShareToken(
+                        friendId, NotificationType.SHARED, notificationMessage, list.getId(),
+                        list.getVisibility() == ListVisibility.LISTED ? share.getShareToken() : null);
 
-                    // Also save the public link if it doesn't exist
-                    if (linkRepository.findByListId(listId).isEmpty()) {
-                        UserListShareLink newLink = new UserListShareLink(list, publicToken);
-                        linkRepository.save(newLink);
-                    }
-                }
                 successfulShares++;
             } catch (Exception e) {
                 failedShares++;
@@ -179,18 +143,12 @@ public class UserListShareServiceImpl implements IUserListShareService {
             }
         }
 
-        // Construir mensajes de error más inteligentes
         if (!alreadySharedFriends.isEmpty()) {
-            if (alreadySharedFriends.size() == 1) {
-                errorMessages.add("La lista ya ha sido compartida con " + alreadySharedFriends.get(0));
-            } else if (alreadySharedFriends.size() == 2) {
-                errorMessages.add("La lista ya ha sido compartida con " + alreadySharedFriends.get(0) + " y " + alreadySharedFriends.get(1));
-            } else {
-                // 3 o más amigos
-                String friendsList = String.join(", ", alreadySharedFriends.subList(0, alreadySharedFriends.size() - 1)) 
-                    + " y " + alreadySharedFriends.get(alreadySharedFriends.size() - 1);
-                errorMessages.add("La lista ya ha sido compartida con " + friendsList);
-            }
+            String friendsList = alreadySharedFriends.size() == 1
+                    ? alreadySharedFriends.get(0)
+                    : String.join(", ", alreadySharedFriends.subList(0, alreadySharedFriends.size() - 1))
+                            + " y " + alreadySharedFriends.get(alreadySharedFriends.size() - 1);
+            errorMessages.add("La lista ya ha sido compartida con " + friendsList);
         }
         errorMessages.addAll(otherErrors);
 
@@ -208,32 +166,6 @@ public class UserListShareServiceImpl implements IUserListShareService {
 
     @Override
     @Transactional
-    public UserListShareLinkDTO generatePublicLink(Long listId, Long ownerId) {
-        UserList list = listRepository.findById(listId)
-                .orElseThrow(() -> new RuntimeException("List not found"));
-
-        if (!list.getUser().getId().equals(ownerId)) {
-            throw new RuntimeException("You are not the owner of this list");
-        }
-
-        if (list.getVisibility() == ListVisibility.PRIVATE) {
-            throw new PrivateListException("No se puede compartir una lista privada");
-        }
-
-        UserListShareLink existingLink = linkRepository.findByListId(listId).orElse(null);
-        if (existingLink != null && existingLink.isActive()) {
-            return mapToLinkDTO(existingLink);
-        }
-
-        String publicToken = UUID.randomUUID().toString();
-        UserListShareLink link = new UserListShareLink(list, publicToken);
-        link = linkRepository.save(link);
-
-        return mapToLinkDTO(link);
-    }
-
-    @Override
-    @Transactional
     public void revokeShare(Long shareId, Long ownerId) {
         UserListShare share = shareRepository.findById(shareId)
                 .orElseThrow(() -> new RuntimeException("Share not found"));
@@ -247,63 +179,17 @@ public class UserListShareServiceImpl implements IUserListShareService {
     }
 
     @Override
-    @Transactional
-    public void revokePublicLink(Long linkId, Long ownerId) {
-        UserListShareLink link = linkRepository.findById(linkId)
-                .orElseThrow(() -> new RuntimeException("Link not found"));
-
-        if (!link.getList().getUser().getId().equals(ownerId)) {
-            throw new RuntimeException("You are not the owner of this list");
-        }
-
-        link.setActive(false);
-        linkRepository.save(link);
-    }
-
-    @Override
     public List<UserListShareDTO> getSharedLists(Long userId) {
-        List<UserListShare> shares = shareRepository.findByReceiverIdAndIsActiveTrue(userId);
-        return shares.stream()
+        return shareRepository.findByReceiverIdAndIsActiveTrue(userId).stream()
                 .map(share -> mapToDTO(share, false))
                 .collect(Collectors.toList());
     }
 
     @Override
     public UserListShareDTO getListByPublicToken(String token) {
-        UserListShareLink link = linkRepository.findByPublicTokenAndIsActiveTrue(token).orElse(null);
-        
-        if (link != null) {
-            UserListShare share = new UserListShare();
-            share.setList(link.getList());
-            share.setOwner(link.getList().getUser());
-            share.setReceiver(null);
-            share.setActive(true);
-            return mapToDTO(share, true);
-        }
-
         UserListShare share = shareRepository.findByShareTokenAndIsActiveTrue(token)
                 .orElseThrow(() -> new RuntimeException("Invalid or expired link"));
-
         return mapToDTO(share, true);
-    }
-
-    @Override
-    public List<UserListShareLinkDTO> getPublicLinks(Long listId, Long ownerId) {
-        UserList list = listRepository.findById(listId)
-                .orElseThrow(() -> new RuntimeException("List not found"));
-
-        if (!list.getUser().getId().equals(ownerId)) {
-            throw new RuntimeException("You are not the owner of this list");
-        }
-
-        if (list.getVisibility() == ListVisibility.PRIVATE) {
-            throw new PrivateListException("No se puede compartir una lista privada");
-        }
-
-        List<UserListShareLink> links = linkRepository.findAllByListId(listId);
-        return links.stream()
-                .map(this::mapToLinkDTO)
-                .collect(Collectors.toList());
     }
 
     private UserListShareDTO mapToDTO(UserListShare share, boolean includeBooks) {
@@ -315,31 +201,15 @@ public class UserListShareServiceImpl implements IUserListShareService {
                     .collect(Collectors.toList());
         }
 
-        String publicToken = null;
-        if (share.getList() != null) {
-            if (share.getList().getVisibility() == ListVisibility.LISTED && share.getShareToken() != null) {
-                publicToken = share.getShareToken();
-            } else {
-                UserListShareLink link = linkRepository.findByListId(share.getList().getId()).orElse(null);
-                if (link != null && link.isActive()) {
-                    publicToken = link.getPublicToken();
-                }
-            }
-        }
-
         return new UserListShareDTO(
-                share.getId(),
-                share.getList().getId(),
-                share.getList().getName(),
+                share.getId(), share.getList().getId(), share.getList().getName(),
                 share.getList().getDescription(),
-                share.getOwner().getId(),
-                share.getOwner().getFullName(),
+                share.getOwner().getId(), share.getOwner().getFullName(),
                 share.getReceiver() != null ? share.getReceiver().getId() : null,
                 share.getReceiver() != null ? share.getReceiver().getFullName() : null,
-                share.getSharedAt(),
-                share.isActive(),
+                share.getSharedAt(), share.isActive(),
                 books,
-                publicToken
+                share.getList().getVisibility() == ListVisibility.LISTED ? share.getShareToken() : null
         );
     }
 
@@ -354,28 +224,12 @@ public class UserListShareServiceImpl implements IUserListShareService {
                 : List.of();
 
         return new BookSummaryDTO(
-                book.getId(),
-                book.getIsbn(),
-                book.getTitle(),
-                authors,
-                genres,
+                book.getId(), book.getIsbn(), book.getTitle(), authors, genres,
                 book.getAverageRating() != null ? book.getAverageRating() : BigDecimal.ZERO,
                 book.getRatingsCount() != null ? book.getRatingsCount() : 0,
-                book.getCoverUrl(),
-                null, // libraryId
-                null, // userAddedId
-                book.getCreatedBy() != null ? book.getCreatedBy().getId() : null
-        );
-    }
-
-    private UserListShareLinkDTO mapToLinkDTO(UserListShareLink link) {
-        return new UserListShareLinkDTO(
-                link.getId(),
-                link.getList().getId(),
-                link.getList().getName(),
-                link.getPublicToken(),
-                link.getCreatedAt(),
-                link.isActive()
+                book.getCoverUrl(), null, null,
+                book.getCreatedBy() != null ? book.getCreatedBy().getId() : null,
+                book.getCreatedAt()
         );
     }
 }

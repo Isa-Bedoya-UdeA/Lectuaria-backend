@@ -20,7 +20,6 @@ import com.lectuaria.backend.repository.book.BookRepository;
 import com.lectuaria.backend.repository.list.UserListBookRepository;
 import com.lectuaria.backend.repository.list.UserListRepository;
 import com.lectuaria.backend.repository.list.UserListShareRepository;
-import com.lectuaria.backend.repository.list.UserListShareLinkRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,18 +37,15 @@ public class UserListServiceImpl implements IUserListService {
     private final UserListBookRepository listBookRepository;
     private final BookRepository bookRepository;
     private final UserListShareRepository listShareRepository;
-    private final UserListShareLinkRepository listShareLinkRepository;
 
     public UserListServiceImpl(UserListRepository listRepository, 
                            UserListBookRepository listBookRepository,
                            BookRepository bookRepository,
-                           UserListShareRepository listShareRepository,
-                           UserListShareLinkRepository listShareLinkRepository) {
+                           UserListShareRepository listShareRepository) {
         this.listRepository = listRepository;
         this.listBookRepository = listBookRepository;
         this.bookRepository = bookRepository;
         this.listShareRepository = listShareRepository;
-        this.listShareLinkRepository = listShareLinkRepository;
     }
 
     @Transactional
@@ -210,7 +206,6 @@ public class UserListServiceImpl implements IUserListService {
 
         listBookRepository.deleteByUserListId(listId);
         listShareRepository.deleteByListId(listId);
-        listShareLinkRepository.deleteByListId(listId);
         listRepository.delete(list);
     }
 
@@ -279,7 +274,8 @@ public class UserListServiceImpl implements IUserListService {
                 book.getCoverUrl(),
                 null, // libraryId
                 null, // userAddedId
-                book.getCreatedBy() != null ? book.getCreatedBy().getId() : null
+                book.getCreatedBy() != null ? book.getCreatedBy().getId() : null,
+                book.getCreatedAt()
         );
     }
 }

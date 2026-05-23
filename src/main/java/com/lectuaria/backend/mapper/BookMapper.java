@@ -6,7 +6,6 @@ import com.lectuaria.backend.model.book.Book;
 import com.lectuaria.backend.model.book.Author;
 import com.lectuaria.backend.model.book.Genre;
 import com.lectuaria.backend.model.book.Publisher;
-import com.lectuaria.backend.model.book.BookFormat;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.Named;
@@ -20,7 +19,7 @@ public interface BookMapper {
     @Mapping(target = "authors", source = "authors", qualifiedByName = "authorsToStringList")
     @Mapping(target = "genres", source = "genres", qualifiedByName = "genresToDtoList")
     @Mapping(target = "publishers", source = "publishers", qualifiedByName = "publishersToStringList")
-    @Mapping(target = "formats", source = "formats", qualifiedByName = "formatsToStringList")
+    @Mapping(target = "formats", ignore = true)
     @Mapping(target = "availability", ignore = true)
     BookDetailDTO toDetailDto(Book book);
 
@@ -62,12 +61,5 @@ public interface BookMapper {
                 .collect(Collectors.toList());
     }
 
-    @Named("formatsToStringList")
-    default List<String> formatsToStringList(List<BookFormat> formats) {
-        if (formats == null)
-            return null;
-        return formats.stream()
-                .map(format -> format.getFormat().getName())
-                .collect(Collectors.toList());
-    }
+    
 }

@@ -37,6 +37,20 @@ public class BookPublishRequestDTO {
     private boolean bookExistsInCatalog;
     private boolean bookExistsInUserLibrary;
 
+    /**
+     * Modalidad de disponibilidad del libro en el catálogo global.
+     * Valores: "physical" | "digital" | "both"
+     * Mapea a registros en la tabla book_format (Físico / Digital).
+     * Por defecto "both" si no se especifica.
+     */
+    private String availabilityMode;
+
+    /**
+     * ID de la plataforma digital (Kindle, Kobo, Google Books, etc.)
+     * Solo aplica cuando availabilityMode es "digital" o "both".
+     */
+    private Long platformId;
+
     // Getters y Setters
     public boolean getBookExistsInCatalog() {
         return bookExistsInCatalog;
@@ -140,5 +154,21 @@ public class BookPublishRequestDTO {
 
     public void setLibraryId(Long libraryId) {
         this.libraryId = libraryId;
+    }
+
+    public String getAvailabilityMode() {
+        return availabilityMode;
+    }
+
+    public void setAvailabilityMode(String availabilityMode) {
+        this.availabilityMode = availabilityMode;
+    }
+
+    public Long getPlatformId() {
+        return platformId;
+    }
+
+    public void setPlatformId(Long platformId) {
+        this.platformId = platformId;
     }
 }

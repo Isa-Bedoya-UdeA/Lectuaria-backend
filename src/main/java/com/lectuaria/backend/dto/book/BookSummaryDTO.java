@@ -1,6 +1,7 @@
 package com.lectuaria.backend.dto.book;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 
 public class BookSummaryDTO {
@@ -13,15 +14,17 @@ public class BookSummaryDTO {
     private Integer ratingsCount;
     private String coverUrl;
     private Long libraryId;
-    private Long userAddedId; // Quién añadió el libro a esta biblioteca
-    private Long createdById; // Quién creó el libro originalmente
+    private Long userAddedId;
+    private Long createdById;
     private List<String> availableLibraries;
+    private Instant createdAt;
 
     public BookSummaryDTO() {}
 
     public BookSummaryDTO(Long id, Long isbn, String title, List<String> authors,
             List<GenreDTO> genres, BigDecimal averageRating,
-            Integer ratingsCount, String coverUrl, Long libraryId, Long userAddedId, Long createdById) {
+            Integer ratingsCount, String coverUrl, Long libraryId, Long userAddedId, Long createdById,
+            Instant createdAt) {
         this.id = id;
         this.isbn = isbn;
         this.title = title;
@@ -33,6 +36,7 @@ public class BookSummaryDTO {
         this.libraryId = libraryId;
         this.userAddedId = userAddedId;
         this.createdById = createdById;
+        this.createdAt = createdAt;
     }
 
     // Getters and Setters
@@ -71,4 +75,7 @@ public class BookSummaryDTO {
 
     public List<String> getAvailableLibraries() { return availableLibraries; }
     public void setAvailableLibraries(List<String> availableLibraries) { this.availableLibraries = availableLibraries; }
+
+    public Instant getCreatedAt() { return createdAt; }
+    public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
 }

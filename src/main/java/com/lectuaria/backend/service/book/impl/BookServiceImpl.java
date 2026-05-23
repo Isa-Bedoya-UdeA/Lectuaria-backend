@@ -3,20 +3,24 @@ package com.lectuaria.backend.service.book.impl;
 import com.lectuaria.backend.dto.book.*;
 import com.lectuaria.backend.service.book.IBookService;
 import com.lectuaria.backend.service.book.IBookRatingService;
+import com.lectuaria.backend.service.storage.S3StorageService;
 import com.lectuaria.backend.dto.common.PaginatedResponse;
 import com.lectuaria.backend.model.book.Author;
 import com.lectuaria.backend.model.book.Book;
+import com.lectuaria.backend.model.book.BookEditHistory;
 import com.lectuaria.backend.model.book.Genre;
 import com.lectuaria.backend.model.book.LibraryBook;
 import com.lectuaria.backend.model.book.Publisher;
 import com.lectuaria.backend.repository.book.AuthorRepository;
+import com.lectuaria.backend.repository.book.BookEditHistoryRepository;
 import com.lectuaria.backend.repository.book.BookRepository;
-import com.lectuaria.backend.repository.book.FormatRepository;
+import com.lectuaria.backend.repository.book.PlatformRepository;
 import com.lectuaria.backend.repository.book.GenreRepository;
 import com.lectuaria.backend.repository.library.LibraryBookRepository;
 import com.lectuaria.backend.repository.list.UserListBookRepository;
 import com.lectuaria.backend.repository.library.LibrarianRepository;
 import com.lectuaria.backend.repository.book.PublisherRepository;
+import com.lectuaria.backend.model.book.Platform;
 import com.lectuaria.backend.repository.auth.UserRepository;
 import com.lectuaria.backend.specification.BookSpecifications;
 import com.lectuaria.backend.exception.UnauthorizedException;
@@ -24,6 +28,8 @@ import com.lectuaria.backend.util.ISBNValidator;
 import com.lectuaria.backend.model.auth.User;
 import com.lectuaria.backend.model.auth.UserRole;
 import com.lectuaria.backend.model.library.Librarian;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.criteria.Join;
@@ -56,6 +62,8 @@ import java.util.stream.Collectors;
 public class BookServiceImpl implements IBookService {
 
     private final BookRepository bookRepository;
+    private final BookEditHistoryRepository bookEditHistoryRepository;
+    private final PlatformRepository platformRepository;
     private final LibraryBookRepository libraryBookRepository;
     private final LibrarianRepository librarianRepository;
     private final IBookRatingService bookRatingService;
@@ -65,19 +73,26 @@ public class BookServiceImpl implements IBookService {
     private final UserRepository userRepository;
     private final EntityManager entityManager;
     private final UserListBookRepository listBookRepository;
+    private final S3StorageService s3StorageService;
+    private final ObjectMapper objectMapper;
 
     public BookServiceImpl(BookRepository bookRepository,
+            BookEditHistoryRepository bookEditHistoryRepository,
+            PlatformRepository platformRepository,
             AuthorRepository authorRepository,
             GenreRepository genreRepository,
             PublisherRepository publisherRepository,
-            FormatRepository formatRepository,
             LibraryBookRepository libraryBookRepository,
             LibrarianRepository librarianRepository,
             IBookRatingService bookRatingService,
             UserRepository userRepository,
             EntityManager entityManager,
-            UserListBookRepository listBookRepository) {
+            UserListBookRepository listBookRepository,
+            S3StorageService s3StorageService,
+            ObjectMapper objectMapper) {
         this.bookRepository = bookRepository;
+        this.bookEditHistoryRepository = bookEditHistoryRepository;
+        this.platformRepository = platformRepository;
         this.libraryBookRepository = libraryBookRepository;
         this.librarianRepository = librarianRepository;
         this.bookRatingService = bookRatingService;
@@ -87,6 +102,8 @@ public class BookServiceImpl implements IBookService {
         this.entityManager = entityManager;
         this.userRepository = userRepository;
         this.listBookRepository = listBookRepository;
+        this.s3StorageService = s3StorageService;
+        this.objectMapper = objectMapper;
     }
 
     public PaginatedResponse<BookSummaryDTO> searchBooks(String keyword, int page, int size) {
@@ -131,7 +148,8 @@ public class BookServiceImpl implements IBookService {
                 Optional<LibraryBook> libraryBook = libraryBookRepository
                         .findByLibraryIdAndBookId(libraryId, book.getId());
                 Long userAddedId = libraryBook.map(lb -> lb.getUserAdded().getId()).orElse(null);
-                return toSummaryDTOWithLibraryInfo(book, libraryId, userAddedId);
+                Instant createdAt = libraryBook.map(lb -> lb.getAddedAt()).orElse(book.getCreatedAt());
+                return toSummaryDTOWithLibraryInfo(book, libraryId, userAddedId, createdAt);
             }
             return toSummaryDTO(book);
         });
@@ -143,13 +161,112 @@ public class BookServiceImpl implements IBookService {
         return toPaginatedResponseFromBooks(bookPage, this::toSummaryDTO);
     }
 
-    public PaginatedResponse<BookSummaryDTO> getBooksByLibrary(Long libraryId, int page, int size) {
-        Pageable pageable = PageRequest.of(page, size);
-        Page<LibraryBook> libraryBookPage = libraryBookRepository.findByLibraryId(libraryId, pageable);
-        return toPaginatedResponseFromLibraryBooks(libraryBookPage, lb -> {
-            Long userAddedId = lb.getUserAdded() != null ? lb.getUserAdded().getId() : null;
-            return toSummaryDTOWithLibraryInfo(lb.getBook(), libraryId, userAddedId);
-        });
+    public PaginatedResponse<BookSummaryDTO> getBooksByLibrary(Long libraryId, int page, int size, String keyword, String sort) {
+        Pageable pageable = buildPageable(sort, page, size);
+
+        Specification<LibraryBook> spec = (root, query, cb) -> {
+            query.distinct(true);
+            Join<LibraryBook, Book> bookJoin = root.join("book", JoinType.INNER);
+            Join<Book, Author> authorJoin = bookJoin.join("authors", JoinType.LEFT);
+            Predicate libraryMatch = cb.equal(root.get("library").get("id"), libraryId);
+
+            if (keyword != null && !keyword.trim().isEmpty()) {
+                List<String> words = Arrays.stream(keyword.trim().toLowerCase().split("\\s+"))
+                        .map(String::trim)
+                        .filter(w -> !w.isEmpty())
+                        .collect(Collectors.toList());
+                if (!words.isEmpty()) {
+                    List<Predicate> wordPredicates = new java.util.ArrayList<>();
+                    for (String w : words) {
+                        String pattern = "%" + w + "%";
+                        wordPredicates.add(cb.or(
+                                cb.like(cb.lower(bookJoin.get("title")), pattern),
+                                cb.like(cb.lower(authorJoin.get("name")), pattern)));
+                    }
+                    return cb.and(libraryMatch, cb.or(wordPredicates.toArray(new Predicate[0])));
+                }
+            }
+            return libraryMatch;
+        };
+
+        Page<LibraryBook> libraryBookPage = libraryBookRepository.findAll(spec, pageable);
+
+        // Manual re-sorting to prioritize exact matches (title > author > partial)
+        List<LibraryBook> sortedBooks = new ArrayList<>(libraryBookPage.getContent());
+        if (keyword != null && !sortedBooks.isEmpty()) {
+            List<String> words = Arrays.stream(keyword.toLowerCase().split("\\s+"))
+                    .map(String::trim)
+                    .filter(w -> !w.isEmpty())
+                    .collect(Collectors.toList());
+            if (!words.isEmpty()) {
+                sortedBooks.sort((lb1, lb2) -> {
+                    Book b1 = lb1.getBook();
+                    Book b2 = lb2.getBook();
+                    int score1 = getMatchScoreForLibraryBook(b1, words);
+                    int score2 = getMatchScoreForLibraryBook(b2, words);
+                    if (score1 != score2) return Integer.compare(score1, score2);
+                    BigDecimal r1 = b1.getAverageRating();
+                    BigDecimal r2 = b2.getAverageRating();
+                    int cmp = (r2 != null ? r2 : BigDecimal.ZERO).compareTo(r1 != null ? r1 : BigDecimal.ZERO);
+                    if (cmp != 0) return cmp;
+                    Integer c1 = b1.getRatingsCount() != null ? b1.getRatingsCount() : 0;
+                    Integer c2 = b2.getRatingsCount() != null ? b2.getRatingsCount() : 0;
+                    return Integer.compare(c2, c1);
+                });
+            }
+        }
+
+        List<BookSummaryDTO> content = sortedBooks.stream()
+                .map(lb -> {
+                    Long userAddedId = lb.getUserAdded() != null ? lb.getUserAdded().getId() : null;
+                    return toSummaryDTOWithLibraryInfo(lb.getBook(), libraryId, userAddedId, lb.getAddedAt());
+                })
+                .collect(Collectors.toList());
+
+        return new PaginatedResponse<>(
+                content,
+                libraryBookPage.getNumber(),
+                libraryBookPage.getSize(),
+                libraryBookPage.getTotalElements(),
+                libraryBookPage.getTotalPages(),
+                libraryBookPage.isFirst(),
+                libraryBookPage.isLast(),
+                libraryBookPage.hasNext(),
+                libraryBookPage.hasPrevious()
+        );
+    }
+
+    private int getMatchScoreForLibraryBook(Book book, List<String> words) {
+        String title = book.getTitle() != null ? book.getTitle().toLowerCase() : "";
+        String authorNames = book.getAuthors() != null
+                ? book.getAuthors().stream()
+                        .map(a -> a.getName() != null ? a.getName().toLowerCase() : "")
+                        .collect(Collectors.joining(" "))
+                : "";
+        int score = 100;
+        for (String w : words) {
+            if (words.size() == 1 && title.equals(w)) return 0;
+            if (title.equals(w)) return Math.min(score, 1);
+            if (words.size() == 1 && authorNames.contains(w)) return 10;
+            if (authorNames.contains(w)) return Math.min(score, 11);
+            if (title.contains(w)) return Math.min(score, 20);
+            if (authorNames.contains(w)) return Math.min(score, 21);
+        }
+        return score;
+    }
+
+    private Pageable buildPageable(String sort, int page, int size) {
+        if (sort == null || sort.isEmpty() || "none".equals(sort)) {
+            return PageRequest.of(page, size);
+        }
+        Sort.Order order = switch (sort) {
+            case "title_asc" -> Sort.Order.asc("book.title");
+            case "title_desc" -> Sort.Order.desc("book.title");
+            case "newest" -> Sort.Order.desc("addedAt");
+            case "oldest" -> Sort.Order.asc("addedAt");
+            default -> Sort.Order.desc("addedAt");
+        };
+        return PageRequest.of(page, size, Sort.by(order));
     }
 
     public PaginatedResponse<BookSummaryDTO> getBooksByGenres(List<Long> genreIds, int page, int size) {
@@ -179,7 +296,8 @@ public class BookServiceImpl implements IBookService {
                 Optional<LibraryBook> libraryBook = libraryBookRepository
                         .findByLibraryIdAndBookId(libraryId, book.getId());
                 Long userAddedId = libraryBook.map(lb -> lb.getUserAdded().getId()).orElse(null);
-                return toSummaryDTOWithLibraryInfo(book, libraryId, userAddedId);
+                Instant createdAt = libraryBook.map(lb -> lb.getAddedAt()).orElse(book.getCreatedAt());
+                return toSummaryDTOWithLibraryInfo(book, libraryId, userAddedId, createdAt);
             }
             return toSummaryDTO(book);
         });
@@ -203,11 +321,10 @@ public class BookServiceImpl implements IBookService {
         return toPaginatedResponseFromBooks(bookPage, this::toSummaryDTO);
     }
 
-    public PaginatedResponse<BookCatalogItemDTO> getNewCatalogBooks(int page, int size, Long genreId,
-            String formatName) {
+    public PaginatedResponse<BookCatalogItemDTO> getNewCatalogBooks(int page, int size, Long genreId) {
         Pageable pageable = PageRequest.of(page, size);
         Instant since = Instant.now().minus(java.time.Duration.ofDays(30));
-        Page<Book> bookPage = bookRepository.findNewCatalogBooks(since, genreId, normalizeBlank(formatName), pageable);
+        Page<Book> bookPage = bookRepository.findNewCatalogBooks(since, genreId, pageable);
         return toPaginatedResponseFromBooks(bookPage,
                 book -> new BookCatalogItemDTO(toSummaryDTO(book), book.getCreatedAt()));
     }
@@ -283,7 +400,8 @@ public class BookServiceImpl implements IBookService {
                 Optional<LibraryBook> libraryBook = libraryBookRepository
                         .findByLibraryIdAndBookId(libraryId, book.getId());
                 Long userAddedId = libraryBook.map(lb -> lb.getUserAdded().getId()).orElse(null);
-                return toSummaryDTOWithLibraryInfo(book, libraryId, userAddedId);
+                Instant createdAt = libraryBook.map(lb -> lb.getAddedAt()).orElse(book.getCreatedAt());
+                return toSummaryDTOWithLibraryInfo(book, libraryId, userAddedId, createdAt);
             }
             return toSummaryDTO(book);
         });
@@ -349,9 +467,13 @@ public class BookServiceImpl implements IBookService {
         }
 
         // Si no hay más bibliotecas que tengan este libro, eliminarlo completamente de
-        // la DB
+        // la DB Y de S3 storage
         long libraryBooksCount = libraryBookRepository.countByBookId(bookId);
         if (libraryBooksCount == 0) {
+            // Delete cover from S3 if exists
+            if (book.getCoverUrl() != null && !book.getCoverUrl().isBlank()) {
+                s3StorageService.deleteCover(book.getCoverUrl());
+            }
             bookRepository.deleteById(bookId);
             entityManager.flush(); // Asegurar que el delete del libro se persista
         }
@@ -390,6 +512,9 @@ public class BookServiceImpl implements IBookService {
             throw new UnauthorizedException(
                     "No tienes permisos para editar este libro. Solo el creador original o un administrador pueden editarlo.");
         }
+
+        // Capturar estado anterior para historial
+        String oldData = toBookJson(book);
 
         book.setTitle(request.getTitle());
         book.setDescription(request.getDescription());
@@ -433,7 +558,13 @@ public class BookServiceImpl implements IBookService {
             book.setPublishers(publishers);
         }
 
+        // No longer using book_format tables (removed)
+
         bookRepository.save(book);
+
+        // Guardar historial de edición
+        String newData = toBookJson(book);
+        saveEditHistory(book, user, oldData, newData);
 
         // Actualizar disponibilidad en la biblioteca del usuario si es bibliotecario
         Librarian librarian = librarianRepository.findByUserId(userId).orElse(null);
@@ -444,12 +575,36 @@ public class BookServiceImpl implements IBookService {
                 LibraryBook lb = lbOpt.get();
                 lb.setPhysicalCopies(request.getAvailability().getPhysicalCopies());
                 lb.setDigitalAvailable(request.getAvailability().isDigital());
+                lb.setDigitalPlatform(request.getPlatformId());
                 libraryBookRepository.save(lb);
             }
         }
 
         return toDetailDTO(book);
     }
+
+    private String toBookJson(Book book) {
+        try {
+            return objectMapper.writeValueAsString(book);
+        } catch (Exception e) {
+            return "{}";
+        }
+    }
+
+    private void saveEditHistory(Book book, User user, String oldValueJson, String newValueJson) {
+        Librarian librarian = librarianRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Librarian no encontrado para este usuario"));
+
+        BookEditHistory history = new BookEditHistory();
+        history.setBook(book);
+        history.setLibrary(librarian.getLibrary());
+        history.setLibrarian(librarian);
+        history.setOldValueJson(oldValueJson);
+        history.setNewValueJson(newValueJson);
+        bookEditHistoryRepository.save(history);
+    }
+
+    // No longer using book_format tables (removed)
 
     // ========== MÉTODOS DE MAPEO ==========
 
@@ -472,7 +627,8 @@ public class BookServiceImpl implements IBookService {
                 book.getAverageRating() != null ? book.getAverageRating() : BigDecimal.ZERO,
                 book.getRatingsCount() != null ? book.getRatingsCount() : 0,
                 book.getCoverUrl(),
-                null, null, book.getCreatedBy() != null ? book.getCreatedBy().getId() : null);
+                null, null, book.getCreatedBy() != null ? book.getCreatedBy().getId() : null,
+                book.getCreatedAt());
 
         if (book.getLibraryBooks() != null) {
             List<String> libNames = book.getLibraryBooks().stream()
@@ -493,10 +649,11 @@ public class BookServiceImpl implements IBookService {
         return value == null || value.trim().isEmpty() ? null : value.trim();
     }
 
-    private BookSummaryDTO toSummaryDTOWithLibraryInfo(Book book, Long libraryId, Long userAddedId) {
+    private BookSummaryDTO toSummaryDTOWithLibraryInfo(Book book, Long libraryId, Long userAddedId, Instant createdAt) {
         BookSummaryDTO dto = toSummaryDTO(book);
         dto.setLibraryId(libraryId);
         dto.setUserAddedId(userAddedId);
+        dto.setCreatedAt(createdAt);
         return dto;
     }
 
@@ -515,13 +672,6 @@ public class BookServiceImpl implements IBookService {
                 ? book.getPublishers().stream().map(Publisher::getName).collect(Collectors.toList())
                 : List.of();
 
-        List<String> formatNames = book.getFormats() != null
-                ? book.getFormats().stream()
-                        .map(bf -> bf.getFormat() != null ? bf.getFormat().getName() : null)
-                        .filter(name -> name != null)
-                        .collect(Collectors.toList())
-                : List.of();
-
         BookDetailDTO dto = new BookDetailDTO(
                 book.getId(),
                 book.getTitle(),
@@ -535,25 +685,36 @@ public class BookServiceImpl implements IBookService {
                 book.getPublicationDate(),
                 book.getPages(),
                 book.getIsbn(),
-                formatNames);
+                List.of());
 
         if (book.getLibraryBooks() != null) {
             List<com.lectuaria.backend.dto.library.LibraryAvailabilityDTO> availabilityList = book.getLibraryBooks()
                     .stream()
-                    .map(lb -> new com.lectuaria.backend.dto.library.LibraryAvailabilityDTO(
-                            new com.lectuaria.backend.dto.library.LibrarySummaryDTO(
-                                    lb.getLibrary().getId(),
-                                    lb.getLibrary().getName(),
-                                    lb.getLibrary().getDescription(),
-                                    lb.getLibrary().getAddress(),
-                                    lb.getLibrary().getContactEmail(),
-                                    lb.getLibrary().getContactPhone(),
-                                    lb.getLibrary().getOpeningHours(),
-                                    null),
-                            lb.getPhysicalCopies() != null && lb.getPhysicalCopies() > 0,
-                            lb.getPhysicalCopies(),
-                            lb.getDigitalAvailable() != null && lb.getDigitalAvailable(),
-                            lb.getDigitalPlatform()))
+                    .map(lb -> {
+                        Long platformId = lb.getDigitalPlatform();
+                        String platformName = null;
+                        if (platformId != null) {
+                            platformName = platformRepository.findById(platformId)
+                                    .map(Platform::getName)
+                                    .orElse(null);
+                        }
+                        var avail = new com.lectuaria.backend.dto.library.LibraryAvailabilityDTO(
+                                new com.lectuaria.backend.dto.library.LibrarySummaryDTO(
+                                        lb.getLibrary().getId(),
+                                        lb.getLibrary().getName(),
+                                        lb.getLibrary().getDescription(),
+                                        lb.getLibrary().getAddress(),
+                                        lb.getLibrary().getContactEmail(),
+                                        lb.getLibrary().getContactPhone(),
+                                        lb.getLibrary().getOpeningHours(),
+                                        null),
+                                lb.getPhysicalCopies() != null && lb.getPhysicalCopies() > 0,
+                                lb.getPhysicalCopies(),
+                                lb.getDigitalAvailable() != null && lb.getDigitalAvailable(),
+                                platformName);
+                        avail.setPlatformId(platformId);
+                        return avail;
+                    })
                     .collect(Collectors.toList());
             dto.setAvailability(availabilityList);
         }

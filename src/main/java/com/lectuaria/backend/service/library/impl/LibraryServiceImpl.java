@@ -118,6 +118,7 @@ public class LibraryServiceImpl implements ILibraryService {
                 book.getCoverUrl(),
                 libraryId,
                 userAddedId,
-                book.getCreatedBy() != null ? book.getCreatedBy().getId() : null);
+                book.getCreatedBy() != null ? book.getCreatedBy().getId() : null,
+                book.getCreatedAt());
     }
 }

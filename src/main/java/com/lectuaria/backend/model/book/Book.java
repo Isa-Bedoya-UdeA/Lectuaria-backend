@@ -62,9 +62,6 @@ public class Book {
     private List<Publisher> publishers;
 
     @OneToMany(mappedBy = "book", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private List<BookFormat> formats;
-
-    @OneToMany(mappedBy = "book", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<LibraryBook> libraryBooks;
 
     // Constructores, Getters y Setters
@@ -183,11 +180,5 @@ public class Book {
         this.publishers = publishers;
     }
 
-    public List<BookFormat> getFormats() {
-        return formats;
-    }
-
-    public void setFormats(List<BookFormat> formats) {
-        this.formats = formats;
-    }
+    
 }

@@ -8,6 +8,9 @@ import org.hibernate.annotations.CreationTimestamp;
 @Table(name = "app_user")
 public class User {
 
+    private static final int MAX_FAILED_ATTEMPTS = 5;
+    private static final long LOCK_DURATION_MINUTES = 15;
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id_user")
@@ -38,6 +41,12 @@ public class User {
     @Column(name = "register_date", updatable = false)
     private Instant createdAt;
 
+    @Column(name = "failed_attempts", nullable = false)
+    private int failedAttempts = 0;
+
+    @Column(name = "locked_until")
+    private Instant lockedUntil;
+
     public User() {
     }
 
@@ -57,6 +66,30 @@ public class User {
         this.username = username;
         this.photoUrl = photoUrl;
         this.biography = biography;
+    }
+
+    public boolean isLocked() {
+        return lockedUntil != null && Instant.now().isBefore(lockedUntil);
+    }
+
+    public void recordFailedLogin() {
+        failedAttempts++;
+        if (failedAttempts >= MAX_FAILED_ATTEMPTS) {
+            lockedUntil = Instant.now().plusSeconds(LOCK_DURATION_MINUTES * 60);
+        }
+    }
+
+    public void resetFailedLoginAttempts() {
+        failedAttempts = 0;
+        lockedUntil = null;
+    }
+
+    public void setLockedUntil(Instant lockedUntil) {
+        this.lockedUntil = lockedUntil;
+    }
+
+    public void setFailedAttempts(int failedAttempts) {
+        this.failedAttempts = failedAttempts;
     }
 
     public Long getId() {
@@ -93,6 +126,14 @@ public class User {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public int getFailedAttempts() {
+        return failedAttempts;
+    }
+
+    public Instant getLockedUntil() {
+        return lockedUntil;
     }
 
     public void setUsername(String username) {

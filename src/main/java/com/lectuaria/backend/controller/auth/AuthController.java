@@ -45,9 +45,11 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<LoginResponseDTO> login(
             @Valid @RequestBody LoginRequestDTO request,
+            HttpServletRequest httpRequest,
             HttpServletResponse response) {
 
-        LoginResponseDTO loginResponse = authService.login(request);
+        String ipAddress = getClientIp(httpRequest);
+        LoginResponseDTO loginResponse = authService.login(request, ipAddress);
 
         long maxAgeSeconds = request.isRememberMe()
                 ? 60 * 60 * 24 * 30 // 30 días
@@ -165,5 +167,17 @@ public class AuthController {
             throw new UnauthorizedException("Token inválido");
 
         return jwtService.extractEmail(token);
+    }
+
+    private String getClientIp(HttpServletRequest request) {
+        String xForwardedFor = request.getHeader("X-Forwarded-For");
+        if (xForwardedFor != null && !xForwardedFor.isEmpty()) {
+            return xForwardedFor.split(",")[0].trim();
+        }
+        String xRealIp = request.getHeader("X-Real-IP");
+        if (xRealIp != null && !xRealIp.isEmpty()) {
+            return xRealIp;
+        }
+        return request.getRemoteAddr();
     }
 }

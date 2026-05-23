@@ -13,10 +13,12 @@ import com.lectuaria.backend.exception.ValidationException;
 import com.lectuaria.backend.model.auth.RefreshToken;
 import com.lectuaria.backend.model.auth.User;
 import com.lectuaria.backend.model.auth.UserRole;
+import com.lectuaria.backend.model.auth.LoginAttempt;
 import com.lectuaria.backend.model.library.Librarian;
 import com.lectuaria.backend.model.library.Library;
 import com.lectuaria.backend.model.LivingZone;
 import com.lectuaria.backend.repository.auth.RefreshTokenRepository;
+import com.lectuaria.backend.repository.auth.LoginAttemptRepository;
 import com.lectuaria.backend.repository.auth.UserRepository;
 import com.lectuaria.backend.repository.library.LibrarianRepository;
 import com.lectuaria.backend.repository.library.LibraryRepository;
@@ -33,6 +35,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 
@@ -42,6 +45,7 @@ public class AuthServiceImpl implements IAuthService {
     private final UserRepository userRepository;
     private final LibraryRepository libraryRepository;
     private final LibrarianRepository librarianRepository;
+    private final LoginAttemptRepository loginAttemptRepository;
     private final IEmailService emailService;
     private final RegisterBusinessValidator validator;
     private final PasswordEncoder passwordEncoder;
@@ -51,9 +55,14 @@ public class AuthServiceImpl implements IAuthService {
     private final LivingZoneRepository livingZoneRepository;
     private final INotificationPreferenceService notificationPreferenceService;
 
+    // Lockout configuration
+    private static final int MAX_FAILED_ATTEMPTS = 5;
+    private static final int LOCK_DURATION_MINUTES = 15;
+
     public AuthServiceImpl(UserRepository userRepository,
             LibraryRepository libraryRepository,
             LibrarianRepository librarianRepository,
+            LoginAttemptRepository loginAttemptRepository,
             LivingZoneRepository livingZoneRepository,
             IEmailService emailService,
             RegisterBusinessValidator validator,
@@ -65,6 +74,7 @@ public class AuthServiceImpl implements IAuthService {
         this.userRepository = userRepository;
         this.libraryRepository = libraryRepository;
         this.librarianRepository = librarianRepository;
+        this.loginAttemptRepository = loginAttemptRepository;
         this.livingZoneRepository = livingZoneRepository;
         this.emailService = emailService;
         this.validator = validator;
@@ -151,15 +161,51 @@ public class AuthServiceImpl implements IAuthService {
     }
 
     @Override
-    public LoginResponseDTO login(LoginRequestDTO request) {
+    public LoginResponseDTO login(LoginRequestDTO request, String ipAddress) {
         String email = request.getEmail().trim().toLowerCase();
 
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ValidationException(List.of("Credenciales inválidas.")));
 
-        if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
-            throw new ValidationException(List.of("Credenciales inválidas."));
+        // Check if account is locked via DB-based attempt count
+        Instant windowStart = Instant.now().minus(15, ChronoUnit.MINUTES);
+        long failedCount = loginAttemptRepository.countFailedSince(user.getId(), windowStart);
+        Instant lockExpiry = user.getLockedUntil();
+        boolean dbLocked = lockExpiry != null && Instant.now().isBefore(lockExpiry);
+
+        if (failedCount >= MAX_FAILED_ATTEMPTS || dbLocked) {
+            if (!dbLocked) {
+                user.setLockedUntil(Instant.now().plus(LOCK_DURATION_MINUTES, ChronoUnit.MINUTES));
+                userRepository.save(user);
+            }
+            throw new ValidationException(List.of(
+                    "Tu cuenta ha sido bloqueada tras varios intentos fallidos de inicio de sesión. "
+                    + "Intenta de nuevo en " + LOCK_DURATION_MINUTES + " minutos."));
         }
+
+        if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
+            // Record failed attempt
+            loginAttemptRepository.save(new LoginAttempt(user, false, ipAddress));
+            user.recordFailedLogin();
+            userRepository.save(user);
+
+            failedCount = loginAttemptRepository.countFailedSince(user.getId(), windowStart);
+            int remaining = MAX_FAILED_ATTEMPTS - (int) failedCount;
+            if (remaining <= 0) {
+                user.setLockedUntil(Instant.now().plus(LOCK_DURATION_MINUTES, ChronoUnit.MINUTES));
+                userRepository.save(user);
+                throw new ValidationException(List.of(
+                        "Tu cuenta ha sido bloqueada. Intenta de nuevo en " + LOCK_DURATION_MINUTES + " minutos."));
+            }
+            throw new ValidationException(List.of(
+                    "Credenciales inválidas. Te quedan " + remaining + " intentos antes de que tu cuenta sea bloqueada."));
+        }
+
+        // Successful login
+        loginAttemptRepository.save(new LoginAttempt(user, true, ipAddress));
+        user.resetFailedLoginAttempts();
+        user.setLockedUntil(null);
+        userRepository.save(user);
 
         String accessToken = jwtService.generateAccessToken(email, user.getRole().name());
         String refreshTokenValue = UUID.randomUUID().toString();
