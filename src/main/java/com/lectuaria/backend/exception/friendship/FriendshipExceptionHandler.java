@@ -3,6 +3,7 @@ package com.lectuaria.backend.exception.friendship;
 import com.lectuaria.backend.dto.ErrorResponseDTO;
 import com.lectuaria.backend.exception.ConflictException;
 import com.lectuaria.backend.exception.ResourceNotFoundException;
+import com.lectuaria.backend.exception.UnauthorizedException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,5 +30,11 @@ public class FriendshipExceptionHandler {
     public ResponseEntity<ErrorResponseDTO> handleConflict(ConflictException exception) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(new ErrorResponseDTO(exception.getMessage(), exception.getErrors()));
+    }
+
+    @ExceptionHandler(UnauthorizedException.class)
+    public ResponseEntity<ErrorResponseDTO> handleUnauthorized(UnauthorizedException ex) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ErrorResponseDTO(ex.getMessage(), List.of("Inicia sesión para continuar.")));
     }
 }
