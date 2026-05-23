@@ -397,15 +397,15 @@ class BookControllerTest {
 
         @Test
         @WithMockUser(username = "reader@test.com", roles = {"READER"})
-        void getBooksByLibrary_nonLibrarian_returns401() throws Exception {
+        void getBooksByLibrary_nonLibrarian_returns403() throws Exception {
             when(userRepository.findByEmail("reader@test.com")).thenReturn(Optional.of(readerUser));
 
             mockMvc.perform(get("/api/books/library/1"))
-                    .andExpect(status().isUnauthorized());
+                    .andExpect(status().isForbidden());
         }
 
         @Test
-        void getBooksByLibrary_librarian_wrongLibrary_returns401() throws Exception {
+        void getBooksByLibrary_librarian_wrongLibrary_returns403() throws Exception {
             withUser("lib@test.com", librarianUser, UserRole.LIBRARIAN);
             when(userRepository.findByEmail("lib@test.com")).thenReturn(Optional.of(librarianUser));
 
@@ -417,7 +417,7 @@ class BookControllerTest {
             when(librarianRepository.findByUser(librarianUser)).thenReturn(Optional.of(otherLibEntity));
 
             mockMvc.perform(get("/api/books/library/1"))
-                    .andExpect(status().isUnauthorized());
+                    .andExpect(status().isForbidden());
         }
 
         @Test

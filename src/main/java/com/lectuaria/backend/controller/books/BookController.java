@@ -12,6 +12,7 @@ import com.lectuaria.backend.dto.common.PaginatedResponse;
 import com.lectuaria.backend.dto.common.ShareLinkDTO;
 import com.lectuaria.backend.util.LinkGenerationUtil;
 
+import com.lectuaria.backend.exception.ForbiddenException;
 import com.lectuaria.backend.exception.UnauthorizedException;
 
 import com.lectuaria.backend.model.auth.User;
@@ -191,7 +192,7 @@ public class BookController {
         // Verificar que el usuario es bibliotecario
         if (user.getRole() != UserRole.LIBRARIAN) {
             logger.warn("BookController: User {} is not a librarian, role: {}", email, user.getRole());
-            throw new UnauthorizedException(
+            throw new ForbiddenException(
                     "Acceso denegado: solo bibliotecarios pueden ver el catálogo de su biblioteca");
 
         }
@@ -206,7 +207,7 @@ public class BookController {
         if (!librarian.getLibrary().getId().equals(libraryId)) {
             logger.warn("BookController: User {} trying to access library {} but belongs to library {}",
                     email, libraryId, librarian.getLibrary().getId());
-            throw new UnauthorizedException(
+            throw new ForbiddenException(
                     "No tienes acceso a esta biblioteca. Solo puedes ver los libros de tu propia biblioteca.");
         }
 

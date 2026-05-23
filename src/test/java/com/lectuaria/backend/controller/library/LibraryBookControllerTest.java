@@ -125,12 +125,13 @@ class LibraryBookControllerTest {
         String token = "valid-reader-token";
         User readerUser = new User("Reader", "reader@test.com", "hash", UserRole.READER, "reader_test", null, null);
 
+        when(jwtService.extractEmail("valid-reader-token")).thenReturn("reader@test.com");
+        when(userRepository.findByEmail("reader@test.com")).thenReturn(Optional.of(readerUser));
+
         Authentication auth = mock(Authentication.class);
         when(auth.isAuthenticated()).thenReturn(true);
         when(auth.getName()).thenReturn("reader@test.com");
         SecurityContextHolder.getContext().setAuthentication(auth);
-
-        when(userRepository.findByEmail("reader@test.com")).thenReturn(Optional.of(readerUser));
 
         mockMvc.perform(patch("/api/library-books/50/availability")
                         .header("Authorization", "Bearer " + token)

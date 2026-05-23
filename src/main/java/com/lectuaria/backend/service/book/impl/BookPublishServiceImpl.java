@@ -4,6 +4,7 @@ import com.lectuaria.backend.dto.book.*;
 import com.lectuaria.backend.service.book.IBookPublishService;
 import com.lectuaria.backend.dto.book.externalApi.ExternalBookMetadataDTO;
 import com.lectuaria.backend.exception.BookAlreadyExistsInLibraryException;
+import com.lectuaria.backend.exception.ForbiddenException;
 import com.lectuaria.backend.model.auth.User;
 import com.lectuaria.backend.model.auth.UserRole;
 import com.lectuaria.backend.model.book.Author;
@@ -80,7 +81,7 @@ public class BookPublishServiceImpl implements IBookPublishService {
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
 
         if (librarianUser.getRole() != UserRole.LIBRARIAN) {
-            throw new RuntimeException("Solo los bibliotecarios pueden publicar libros");
+            throw new ForbiddenException("Solo los bibliotecarios pueden publicar libros");
         }
 
         // 2. Obtener la biblioteca del bibliotecario
