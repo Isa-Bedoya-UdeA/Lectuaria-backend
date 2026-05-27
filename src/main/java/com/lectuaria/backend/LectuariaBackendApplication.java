@@ -10,8 +10,13 @@ public class LectuariaBackendApplication {
     public static void main(String[] args) {
         SpringApplication app = new SpringApplication(LectuariaBackendApplication.class);
 
-        // Forzar perfil dev explícitamente
-        app.setAdditionalProfiles("dev");
+        // Solo forzar dev si no hay perfil activo (para desarrollo local)
+        String[] activeProfiles = System.getProperty("spring.profiles.active", "").split(",");
+        boolean hasActiveProfile = activeProfiles.length > 0 && !activeProfiles[0].isEmpty();
+        
+        if (!hasActiveProfile) {
+            app.setAdditionalProfiles("dev");
+        }
 
         var ctx = app.run(args);
         System.out.println("✅ Perfiles activos: " + Arrays.toString(ctx.getEnvironment().getActiveProfiles()));
