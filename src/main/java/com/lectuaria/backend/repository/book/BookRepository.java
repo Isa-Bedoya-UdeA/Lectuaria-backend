@@ -82,3 +82,4 @@ public interface BookRepository extends JpaRepository<Book, Long>, JpaSpecificat
 			"WHERE (:formatType = 'physical' AND lb.physicalCopies > 0) " +
 			"OR (:formatType = 'digital' AND lb.digitalAvailable = true)")
 	Page<Book> findByFormatAvailability(@Param("formatType") String formatType, Pageable pageable);
+}
