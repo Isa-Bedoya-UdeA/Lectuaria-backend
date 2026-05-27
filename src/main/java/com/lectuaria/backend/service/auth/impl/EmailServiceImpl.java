@@ -1,5 +1,7 @@
 package com.lectuaria.backend.service.auth.impl;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.lectuaria.backend.service.auth.IEmailService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,6 +22,8 @@ public class EmailServiceImpl implements IEmailService {
     private static final Logger logger = LoggerFactory.getLogger(EmailServiceImpl.class);
 
     private final TemplateEngine templateEngine;
+    private final ObjectMapper objectMapper;
+    private final HttpClient httpClient;
 
     @Value("${platform.name:Lectuaria}")
     private String platformName;
@@ -33,10 +37,9 @@ public class EmailServiceImpl implements IEmailService {
     @Value("${email.from.name:Lectuaria}")
     private String fromName;
 
-    private final HttpClient httpClient;
-
     public EmailServiceImpl(TemplateEngine templateEngine) {
         this.templateEngine = templateEngine;
+        this.objectMapper = new ObjectMapper();
         this.httpClient = HttpClient.newHttpClient();
     }
 
@@ -58,29 +61,26 @@ public class EmailServiceImpl implements IEmailService {
 
             String htmlContent = templateEngine.process("password-reset", context);
 
-            String jsonBody = String.format("""
-                {
-                    "from": "%s <%s>",
-                    "to": ["%s"],
-                    "subject": "Restablecer tu contraseña - %s",
-                    "html": %s
-                }
-                """,
-                fromName,
-                fromAddress,
-                to,
-                platformName,
-                escapeJson(htmlContent)
-            );
+            ObjectNode jsonBody = objectMapper.createObjectNode();
+            jsonBody.put("from", fromName + " <" + fromAddress + ">");
+            jsonBody.putPOJO("to", new String[]{to});
+            jsonBody.put("subject", "Restablecer tu contraseña - " + platformName);
+            jsonBody.put("html", htmlContent);
+
+            String json = objectMapper.writeValueAsString(jsonBody);
+
+            logger.debug("Email request JSON: {}", json);
 
             HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create("https://api.resend.com/emails"))
                 .header("Authorization", "Bearer " + apiKey)
                 .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
+                .POST(HttpRequest.BodyPublishers.ofString(json))
                 .build();
 
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+            logger.debug("Resend API response: {} - {}", response.statusCode(), response.body());
 
             if (response.statusCode() >= 200 && response.statusCode() < 300) {
                 logger.info("Email de recuperación enviado exitosamente a: {}", to);
@@ -94,14 +94,5 @@ public class EmailServiceImpl implements IEmailService {
             logger.error("Error al enviar email de recuperación a: {}", to, e);
             throw new RuntimeException("Failed to send email", e);
         }
-    }
-
-    private String escapeJson(String text) {
-        return text
-            .replace("\\", "\\\\")
-            .replace("\"", "\\\"")
-            .replace("\n", "\\n")
-            .replace("\r", "\\r")
-            .replace("\t", "\\t");
     }
 }
