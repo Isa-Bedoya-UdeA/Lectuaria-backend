@@ -52,13 +52,13 @@ public class AuthController {
         LoginResponseDTO loginResponse = authService.login(request, ipAddress);
 
         long maxAgeSeconds = request.isRememberMe()
-                ? 60 * 60 * 24 * 30 // 30 días
-                : 60 * 60 * 8; // 8 horas
+                ? 60 * 60 * 24 * 30
+                : 60 * 60 * 8;
 
         @SuppressWarnings("null")
         ResponseCookie refreshCookie = ResponseCookie.from("refreshToken", loginResponse.getRefreshToken())
                 .httpOnly(true)
-                .secure(false) // Permitir en http://localhost
+                .secure(false)
                 .path("/")
                 .maxAge(maxAgeSeconds)
                 .sameSite("Lax")
@@ -101,7 +101,7 @@ public class AuthController {
 
     @PutMapping("/me")
     public ProfileResponseDTO updateMyProfile(HttpServletRequest request,
-            @Valid @RequestBody ProfileUpdateRequestDTO profileUpdateRequest) { // ← Agregar @Valid
+            @Valid @RequestBody ProfileUpdateRequestDTO profileUpdateRequest) {
         String email = extractEmail(request);
         return authService.updateProfile(email, profileUpdateRequest);
     }

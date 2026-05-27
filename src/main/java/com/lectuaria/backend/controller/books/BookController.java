@@ -1,5 +1,3 @@
-// src/main/java/com/lectuaria/backend/controller/books/BookController.java
-
 package com.lectuaria.backend.controller.books;
 
 import com.lectuaria.backend.dto.book.BookCatalogItemDTO;
@@ -62,7 +60,7 @@ public class BookController {
         this.librarianRepository = librarianRepository;
     }
 
-    // ========== BÚSQUEDA Y LISTADO ==========
+    
 
     @GetMapping
 
@@ -76,7 +74,6 @@ public class BookController {
             @RequestParam(required = false) Integer endYear,
             @RequestParam(required = false) List<String> formatTypes) {
 
-        // Get authenticated user or null if not authenticated
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         Long userId = null;
 
@@ -173,7 +170,6 @@ public class BookController {
             @RequestParam(required = false) String sort) {
         logger.info("BookController: getBooksByLibrary called with libraryId: {}, keyword: {}, sort: {}", libraryId, keyword, sort);
 
-        // Obtener el usuario autenticado desde el contexto de seguridad de Spring
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
         if (authentication == null || !authentication.isAuthenticated()) {
@@ -184,20 +180,16 @@ public class BookController {
         String email = authentication.getName();
         logger.info("BookController: Email extracted from auth context: {}", email);
 
-        // Verificar que el usuario existe
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new UnauthorizedException("Usuario no encontrado"));
         logger.info("BookController: User found: {} with role: {}", user.getEmail(), user.getRole());
 
-        // Verificar que el usuario es bibliotecario
         if (user.getRole() != UserRole.LIBRARIAN) {
             logger.warn("BookController: User {} is not a librarian, role: {}", email, user.getRole());
             throw new ForbiddenException(
                     "Acceso denegado: solo bibliotecarios pueden ver el catálogo de su biblioteca");
 
         }
-
-        // Verificar que la biblioteca pertenece al usuario
 
         Librarian librarian = librarianRepository.findByUser(user)
                 .orElseThrow(() -> new UnauthorizedException("Perfil de bibliotecario no encontrado"));
@@ -212,7 +204,6 @@ public class BookController {
         }
 
         logger.info("BookController: All validations passed, returning books for library: {}", libraryId);
-        // Si todo está bien, retornar los libros con búsqueda y ordenamiento opcionales
         return ResponseEntity.ok(bookService.getBooksByLibrary(libraryId, page, size, keyword, sort));
 
     }
@@ -288,12 +279,9 @@ public class BookController {
         return ResponseEntity.ok(bookService.getBookByIsbn(isbn));
     }
 
-    // ========== EDICIÓN Y ELIMINACIÓN ==========
-
     @DeleteMapping("/{id}/library")
     public ResponseEntity<String> removeBookFromLibrary(@PathVariable Long id) {
 
-        // Obtener el usuario autenticado desde el contexto de seguridad de Spring
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         logger.info("BookController: Remove book from library by user: {}", authentication.getName());
 
@@ -317,7 +305,6 @@ public class BookController {
     @DeleteMapping("/{id}")
     public ResponseEntity<String> deleteBook(@PathVariable Long id) {
 
-        // Obtener el usuario autenticado desde el contexto de seguridad de Spring
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         logger.info("BookController: Delete book by user: {}", authentication.getName());
 
@@ -343,7 +330,6 @@ public class BookController {
             @PathVariable Long id,
             @RequestBody BookPublishRequestDTO requestDto) {
 
-        // Obtener el usuario autenticado desde el contexto de seguridad de Spring
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         logger.info("BookController: Update book by user: {}", authentication.getName());
 

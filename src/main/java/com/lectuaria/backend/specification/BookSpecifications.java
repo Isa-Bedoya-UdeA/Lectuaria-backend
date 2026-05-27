@@ -10,7 +10,7 @@ import jakarta.persistence.criteria.*;
 import java.util.ArrayList;
 import java.util.List;
 
-@SuppressWarnings("null") // ← Suprime warnings de null en Specifications
+@SuppressWarnings("null")
 public class BookSpecifications {
 
     public static Specification<Book> hasGenres(List<Long> genreIds) {
@@ -26,14 +26,12 @@ public class BookSpecifications {
     @SuppressWarnings("null")
     public static Specification<Book> containsKeywords(List<String> keywords) {
         return (root, query, cb) -> {
-            // Evitar duplicados por JOINs múltiples
             query.distinct(true);
 
             if (keywords == null || keywords.isEmpty()) {
                 return cb.conjunction();
             }
 
-            // Crear JOINs una sola vez (fuera del loop)
             Join<Book, Author> authorJoin = root.join("authors", JoinType.LEFT);
             Join<Book, Genre> genreJoin = root.join("genres", JoinType.LEFT);
 
@@ -42,17 +40,13 @@ public class BookSpecifications {
             for (String keyword : keywords) {
                 String likePattern = "%" + keyword.toLowerCase() + "%";
 
-                // Predicados para esta keyword (OR entre título, autor y género)
-                // Usar like directamente sin lower() para evitar problemas con bytea fields
                 Predicate titleMatch = cb.like(root.get("title"), likePattern);
                 Predicate authorMatch = cb.like(authorJoin.get("name"), likePattern);
                 Predicate genreMatch = cb.like(genreJoin.get("name"), likePattern);
 
-                // Unir con OR: coincide si encuentra la keyword en título O autor O género
                 keywordPredicates.add(cb.or(titleMatch, authorMatch, genreMatch));
             }
 
-            // Unir todas las keywords con OR: coincide con al menos una keyword
             return cb.or(keywordPredicates.toArray(new Predicate[0]));
         };
     }
@@ -60,9 +54,8 @@ public class BookSpecifications {
     public static Specification<Book> hasMinimumRating(Float minRating) {
         return (root, query, cb) -> {
             if (minRating == null || minRating <= 0) {
-                return cb.conjunction(); // Sin filtro
+                return cb.conjunction();
             }
-            // Filtrar libros con averageRating >= minRating
             return cb.greaterThanOrEqualTo(root.get("averageRating"), minRating);
         };
     }
@@ -73,7 +66,6 @@ public class BookSpecifications {
                 return cb.conjunction();
             }
             query.distinct(true);
-            // Join con library_book para filtrar por id_library
             Join<Object, Object> libraryJoin = root.join("libraryBooks");
             return libraryJoin.get("library").get("id").in(libraryIds);
         };
@@ -84,7 +76,6 @@ public class BookSpecifications {
             if (minYear == null) {
                 return cb.conjunction();
             }
-            // Use native PostgreSQL EXTRACT function to get year from date
             Expression<Integer> yearExpression = cb.function("date_part", Integer.class,
                 cb.literal("year"), root.get("publicationDate"));
             return cb.greaterThanOrEqualTo(yearExpression, minYear);
@@ -96,7 +87,6 @@ public class BookSpecifications {
             if (maxYear == null) {
                 return cb.conjunction();
             }
-            // Use native PostgreSQL EXTRACT function to get year from date
             Expression<Integer> yearExpression = cb.function("date_part", Integer.class,
                 cb.literal("year"), root.get("publicationDate"));
             return cb.lessThanOrEqualTo(yearExpression, maxYear);
@@ -109,7 +99,6 @@ public class BookSpecifications {
                 return cb.conjunction();
             }
             query.distinct(true);
-            // Join with library_books to filter by format availability
             Join<Book, Object> libraryBookJoin = root.join("libraryBooks", JoinType.INNER);
             
             List<Predicate> formatPredicates = new ArrayList<>();

@@ -25,8 +25,6 @@ public class JwtServiceImpl implements JwtService {
     @Value("${jwt.refresh-expiration}")
     private long refreshExpiration;
 
-    // === GENERACIÓN DE TOKENS ===
-
     @Override
     public String generateAccessToken(String email, String role) {
         Map<String, Object> extraClaims = new HashMap<>();
@@ -50,8 +48,6 @@ public class JwtServiceImpl implements JwtService {
                 .signWith(getSignInKey())
                 .compact();
     }
-
-    // === VALIDACIÓN Y EXTRACCIÓN ===
 
     @Override
     public String extractEmail(String token) {

@@ -36,7 +36,6 @@ public class LibraryBookPublishController {
             @Valid @RequestBody BookPublishRequestDTO request,
             HttpServletRequest httpRequest) {
 
-        // Extraer user ID del token JWT
         Long librarianUserId = extractUserIdFromToken(httpRequest);
 
         BookPublishResponseDTO response = bookPublishService.publishBook(request, librarianUserId);
@@ -100,7 +99,6 @@ public class LibraryBookPublishController {
 
         String token = authHeader.substring(7);
 
-        // Usar tu JwtService existente para extraer el email
         String email = jwtService.extractEmail(token);
 
         // Buscar el usuario por email y retornar su ID

@@ -40,7 +40,6 @@ public class BookPublishController {
             @Valid @RequestBody BookPublishRequestDTO request,
             HttpServletRequest httpRequest) {
 
-        // Extraer user ID del token JWT (necesitas implementar este método)
         Long librarianUserId = extractUserIdFromToken(httpRequest);
 
         BookPublishResponseDTO response = bookPublishService.publishBook(request, librarianUserId);
@@ -56,7 +55,6 @@ public class BookPublishController {
 
         // If cover image provided as base64, upload to S3 and set as coverUrl
         if (request.getCoverUrl() != null && request.getCoverUrl().startsWith("data:")) {
-            // Extract base64 content and mime type from data URI
             String dataUri = request.getCoverUrl();
             String mimeType = dataUri.substring("data:".length(), dataUri.indexOf(";"));
             String base64Data = dataUri.substring(dataUri.indexOf(",") + 1);
@@ -74,7 +72,6 @@ public class BookPublishController {
     @GetMapping("/prefill/{isbn}")
     public ResponseEntity<BookPublishRequestDTO> prefillFromOpenLibrary(@PathVariable @NonNull Long isbn,
             HttpServletRequest httpRequest) {
-        // Extraer librarianUserId del token JWT
         Long librarianUserId = extractUserIdFromToken(httpRequest);
 
         BookPublishRequestDTO request = bookPublishService.prefillFromOpenLibrary(isbn, librarianUserId);
@@ -99,7 +96,6 @@ public class BookPublishController {
 
         String token = authHeader.substring(7);
 
-        // Usar tu JwtService existente para extraer el email
         String email = jwtService.extractEmail(token);
 
         // Buscar el usuario por email y retornar su ID
