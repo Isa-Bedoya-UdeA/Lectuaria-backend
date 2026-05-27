@@ -25,6 +25,9 @@ public class EmailServiceImpl implements IEmailService {
     @Value("${platform.name:Lectuaria}")
     private String platformName;
 
+    @Value("${spring.mail.username}")
+    private String emailUsername;
+
     public EmailServiceImpl(JavaMailSender mailSender, TemplateEngine templateEngine) {
         this.mailSender = mailSender;
         this.templateEngine = templateEngine;
@@ -41,8 +44,9 @@ public class EmailServiceImpl implements IEmailService {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
-            helper.setFrom("noreply@lectuaria.com");
+            helper.setFrom(emailUsername);
             helper.setTo(to);
+            helper.setReplyTo(emailUsername);
             helper.setSubject("Restablecer tu contraseña - " + platformName);
 
             Context context = new Context();
