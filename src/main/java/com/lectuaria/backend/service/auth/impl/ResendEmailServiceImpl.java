@@ -15,9 +15,9 @@ import java.net.http.HttpResponse;
 import java.util.Map;
 
 @Service
-public class EmailServiceImpl implements IEmailService {
+public class ResendEmailServiceImpl implements IEmailService {
 
-    private static final Logger logger = LoggerFactory.getLogger(EmailServiceImpl.class);
+    private static final Logger logger = LoggerFactory.getLogger(ResendEmailServiceImpl.class);
 
     private final TemplateEngine templateEngine;
 
@@ -35,7 +35,7 @@ public class EmailServiceImpl implements IEmailService {
 
     private final HttpClient httpClient;
 
-    public EmailServiceImpl(TemplateEngine templateEngine) {
+    public ResendEmailServiceImpl(TemplateEngine templateEngine) {
         this.templateEngine = templateEngine;
         this.httpClient = HttpClient.newHttpClient();
     }
