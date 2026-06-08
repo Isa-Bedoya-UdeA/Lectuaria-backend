@@ -73,10 +73,10 @@ class LibraryControllerTest {
 
         mockMvc.perform(get("/api/libraries"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(2))
-                .andExpect(jsonPath("$[0].name").value("Central Library"))
-                .andExpect(jsonPath("$[0].address").value("123 Main St"))
-                .andExpect(jsonPath("$[1].name").value("Branch Library"));
+                .andExpect(jsonPath("$._embedded.librarySummaryDTOList.length()").value(2))
+                .andExpect(jsonPath("$._embedded.librarySummaryDTOList[0].name").value("Central Library"))
+                .andExpect(jsonPath("$._embedded.librarySummaryDTOList[0].address").value("123 Main St"))
+                .andExpect(jsonPath("$._embedded.librarySummaryDTOList[1].name").value("Branch Library"));
     }
 
     @Test
@@ -85,7 +85,7 @@ class LibraryControllerTest {
 
         mockMvc.perform(get("/api/libraries"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(0));
+                .andExpect(jsonPath("$._embedded.librarySummaryDTOList").doesNotExist());
     }
 
     // ========== GET /api/libraries/me/statistics ==========

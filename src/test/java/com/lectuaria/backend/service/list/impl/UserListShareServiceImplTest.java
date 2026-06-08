@@ -117,8 +117,8 @@ class UserListShareServiceImplTest {
             when(listRepository.findById(999L)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.shareListWithFriends(999L, List.of(2L), 1L))
-                    .isInstanceOf(RuntimeException.class)
-                    .hasMessage("List not found");
+                    .isInstanceOf(com.lectuaria.backend.exception.ResourceNotFoundException.class)
+                    .hasMessageContaining("Lista no encontrada");
         }
 
         @Test
@@ -126,8 +126,7 @@ class UserListShareServiceImplTest {
             when(listRepository.findById(100L)).thenReturn(Optional.of(list));
 
             assertThatThrownBy(() -> service.shareListWithFriends(100L, List.of(2L), 999L))
-                    .isInstanceOf(RuntimeException.class)
-                    .hasMessage("You are not the owner of this list");
+                    .isInstanceOf(com.lectuaria.backend.exception.ForbiddenException.class);
         }
 
 @Test
@@ -203,8 +202,7 @@ class UserListShareServiceImplTest {
             when(shareRepository.findById(1L)).thenReturn(Optional.of(share));
 
             assertThatThrownBy(() -> service.revokeShare(1L, 999L))
-                    .isInstanceOf(RuntimeException.class)
-                    .hasMessage("You are not the owner of this share");
+                    .isInstanceOf(com.lectuaria.backend.exception.ForbiddenException.class);
         }
 
         @Test
@@ -212,8 +210,8 @@ class UserListShareServiceImplTest {
             when(shareRepository.findById(999L)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.revokeShare(999L, 1L))
-                    .isInstanceOf(RuntimeException.class)
-                    .hasMessage("Share not found");
+                    .isInstanceOf(com.lectuaria.backend.exception.ResourceNotFoundException.class)
+                    .hasMessageContaining("Share no encontrado");
         }
     }
 
@@ -264,8 +262,7 @@ class UserListShareServiceImplTest {
             when(shareRepository.findByShareTokenAndIsActiveTrue("invalid-token")).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.getListByPublicToken("invalid-token"))
-                    .isInstanceOf(RuntimeException.class)
-                    .hasMessage("Invalid or expired link");
+                    .isInstanceOf(com.lectuaria.backend.exception.list.InvalidShareTokenException.class);
         }
     }
 }

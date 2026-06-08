@@ -5,6 +5,7 @@ import com.lectuaria.backend.dto.book.BookCatalogItemDTO;
 import com.lectuaria.backend.dto.book.BookDetailDTO;
 import com.lectuaria.backend.dto.book.BookSummaryDTO;
 import com.lectuaria.backend.dto.book.FeaturedSectionsDTO;
+import com.lectuaria.backend.exception.UnauthorizedException;
 import com.lectuaria.backend.dto.common.PaginatedResponse;
 import com.lectuaria.backend.model.book.Author;
 import com.lectuaria.backend.model.book.Book;
@@ -87,12 +88,17 @@ class BookServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        List<com.lectuaria.backend.service.book.search.BookFilterStrategy> strategies = List.of(
+                new com.lectuaria.backend.service.book.search.MinRatingFilterStrategy(),
+                new com.lectuaria.backend.service.book.search.MinYearFilterStrategy(),
+                new com.lectuaria.backend.service.book.search.MaxYearFilterStrategy(),
+                new com.lectuaria.backend.service.book.search.FormatFilterStrategy());
         bookService = new BookServiceImpl(
                 bookRepository, bookEditHistoryRepository, platformRepository,
                 authorRepository, genreRepository, publisherRepository,
                 libraryBookRepository, librarianRepository, bookRatingService,
                 userRepository, entityManager, listBookRepository,
-                s3StorageService, objectMapper);
+                s3StorageService, objectMapper, strategies);
     }
 
     // ===== SEARCH BOOKS TESTS =====
@@ -361,7 +367,7 @@ class BookServiceImplTest {
 
             when(userRepository.findById(1L)).thenReturn(Optional.of(readerUser));
 
-            assertThrows(com.lectuaria.backend.exception.UnauthorizedException.class,
+            assertThrows(UnauthorizedException.class,
                     () -> bookService.removeBookFromLibrary(10L, 1L));
         }
 
@@ -448,12 +454,12 @@ class BookServiceImplTest {
 
             when(userRepository.findById(1L)).thenReturn(Optional.of(librarian));
 
-            assertThrows(com.lectuaria.backend.exception.UnauthorizedException.class,
+            assertThrows(UnauthorizedException.class,
                     () -> bookService.deleteBook(10L, 1L));
         }
 
         @Test
-        @DisplayName("throws RuntimeException when book not found")
+        @DisplayName("throws ResourceNotFoundException when book not found")
         void deleteBook_throwsWhenBookNotFound() throws Exception {
             User admin = new User("Admin", "admin@test.com", "hash", UserRole.ADMIN, "admin", null, null);
             setId(admin, 1L);
@@ -461,9 +467,10 @@ class BookServiceImplTest {
             when(userRepository.findById(1L)).thenReturn(Optional.of(admin));
             when(bookRepository.findById(999L)).thenReturn(Optional.empty());
 
-            RuntimeException ex = assertThrows(RuntimeException.class,
+            com.lectuaria.backend.exception.ResourceNotFoundException ex = assertThrows(
+                    com.lectuaria.backend.exception.ResourceNotFoundException.class,
                     () -> bookService.deleteBook(999L, 1L));
-            assertEquals("Libro no encontrado", ex.getMessage());
+            assertTrue(ex.getMessage().contains("Libro no encontrado"));
         }
     }
 

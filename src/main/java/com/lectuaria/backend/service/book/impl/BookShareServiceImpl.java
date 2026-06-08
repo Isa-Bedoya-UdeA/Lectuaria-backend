@@ -3,18 +3,16 @@ package com.lectuaria.backend.service.book.impl;
 import com.lectuaria.backend.dto.book.BookShareRequestDTO;
 import com.lectuaria.backend.dto.book.BookShareResponseDTO;
 import com.lectuaria.backend.dto.book.ShareResultDTO;
-import com.lectuaria.backend.exception.ConflictException;
+import com.lectuaria.backend.event.BookSharedEvent;
 import com.lectuaria.backend.exception.ResourceNotFoundException;
-import com.lectuaria.backend.exception.list.AlreadySharedException;
 import com.lectuaria.backend.model.auth.User;
 import com.lectuaria.backend.model.book.Book;
 import com.lectuaria.backend.model.book.BookShare;
-import com.lectuaria.backend.model.notification.NotificationType;
 import com.lectuaria.backend.repository.auth.UserRepository;
 import com.lectuaria.backend.repository.book.BookRepository;
 import com.lectuaria.backend.repository.book.BookShareRepository;
 import com.lectuaria.backend.service.book.IBookShareService;
-import com.lectuaria.backend.service.notification.INotificationService;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,22 +20,30 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * Implementacion del servicio de comparticion de libros.
+ *
+ * Design Pattern: Observer (GoF). Tras persistir un BookShare, en vez de
+ * llamar directamente al servicio de notificaciones, publica un
+ * {@link BookSharedEvent} que es escuchado por BookSharedNotificationListener
+ * y (futuro) por listeners de metricas, feed, etc.
+ */
 @Service
 public class BookShareServiceImpl implements IBookShareService {
 
     private final BookShareRepository bookShareRepository;
     private final BookRepository bookRepository;
     private final UserRepository userRepository;
-    private final INotificationService notificationService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public BookShareServiceImpl(BookShareRepository bookShareRepository,
-                               BookRepository bookRepository,
-                               UserRepository userRepository,
-                               INotificationService notificationService) {
+                                BookRepository bookRepository,
+                                UserRepository userRepository,
+                                ApplicationEventPublisher eventPublisher) {
         this.bookShareRepository = bookShareRepository;
         this.bookRepository = bookRepository;
         this.userRepository = userRepository;
-        this.notificationService = notificationService;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
@@ -47,7 +53,6 @@ public class BookShareServiceImpl implements IBookShareService {
 
         int successfulShares = 0;
         int failedShares = 0;
-        List<String> errorMessages = new ArrayList<>();
         List<String> alreadySharedFriends = new ArrayList<>();
         List<String> otherErrors = new ArrayList<>();
 
@@ -65,16 +70,11 @@ public class BookShareServiceImpl implements IBookShareService {
                 BookShare bookShare = new BookShare(sender, receiver, book, request.getMessage());
                 bookShare = bookShareRepository.save(bookShare);
 
-                String message = request.getMessage() != null && !request.getMessage().isEmpty()
-                        ? sender.getFullName() + " te ha compartido este libro: " + book.getTitle() + " - " + request.getMessage()
-                        : sender.getFullName() + " te ha compartido este libro: " + book.getTitle();
+                // Design Pattern: Observer (GoF) — publicamos el evento;
+                // BookSharedNotificationListener se encarga de la notificacion.
+                eventPublisher.publishEvent(
+                        new BookSharedEvent(this, sender, receiver, book, request.getMessage()));
 
-                notificationService.createNotification(
-                        friendId,
-                        NotificationType.SHARED,
-                        message,
-                        book.getIsbn()
-                );
                 successfulShares++;
             } catch (Exception e) {
                 failedShares++;
@@ -82,16 +82,15 @@ public class BookShareServiceImpl implements IBookShareService {
             }
         }
 
-        // Construir mensajes de error más inteligentes
+        List<String> errorMessages = new ArrayList<>();
         if (!alreadySharedFriends.isEmpty()) {
             if (alreadySharedFriends.size() == 1) {
                 errorMessages.add("El libro ya ha sido compartido con " + alreadySharedFriends.get(0));
             } else if (alreadySharedFriends.size() == 2) {
                 errorMessages.add("El libro ya ha sido compartido con " + alreadySharedFriends.get(0) + " y " + alreadySharedFriends.get(1));
             } else {
-                // 3 o más amigos
-                String friendsList = String.join(", ", alreadySharedFriends.subList(0, alreadySharedFriends.size() - 1)) 
-                    + " y " + alreadySharedFriends.get(alreadySharedFriends.size() - 1);
+                String friendsList = String.join(", ", alreadySharedFriends.subList(0, alreadySharedFriends.size() - 1))
+                        + " y " + alreadySharedFriends.get(alreadySharedFriends.size() - 1);
                 errorMessages.add("El libro ya ha sido compartido con " + friendsList);
             }
         }

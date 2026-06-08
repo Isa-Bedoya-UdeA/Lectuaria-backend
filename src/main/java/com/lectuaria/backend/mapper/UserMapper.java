@@ -5,7 +5,6 @@ import com.lectuaria.backend.dto.user.UserProfileDTO;
 import com.lectuaria.backend.model.auth.User;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
-import org.mapstruct.Named;
 
 @Mapper(componentModel = "spring")
 public interface UserMapper {
@@ -21,13 +20,8 @@ public interface UserMapper {
     @Mapping(target = "userRole", source = "role")
     RegisterRequestDTO toDto(User user);
 
-    @Named("hashPassword")
-    default String hashPassword(String password) {
-        // This should be handled by the service layer with proper password encoding
-        return password;
-    }
-
-    // Custom method to create User with constructor since setters are missing
+    // Custom method para construir un User desde un RegisterRequestDTO.
+    // El password ya viene hasheado por el service layer.
     default User createUserFromRegisterRequest(RegisterRequestDTO registerRequestDTO, String hashedPassword) {
         return new User(
             registerRequestDTO.getFullName(),

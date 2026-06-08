@@ -121,9 +121,9 @@ class UserListControllerTest {
             mockMvc.perform(get("/api/lists")
                             .header("Authorization", authHeader("any-token")))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.length()").value(2))
-                    .andExpect(jsonPath("$[0].name").value("Favorites"))
-                    .andExpect(jsonPath("$[1].name").value("Reading Now"));
+                    .andExpect(jsonPath("$._embedded.userListDTOList.length()").value(2))
+                    .andExpect(jsonPath("$._embedded.userListDTOList[0].name").value("Favorites"))
+                    .andExpect(jsonPath("$._embedded.userListDTOList[1].name").value("Reading Now"));
         }
 
         @Test

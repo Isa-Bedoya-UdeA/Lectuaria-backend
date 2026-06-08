@@ -45,6 +45,9 @@ class NotificationPreferenceControllerTest {
     @MockBean
     private JwtService jwtService;
 
+    @MockBean
+    private com.lectuaria.backend.security.AuthenticatedUserResolver authenticatedUserResolver;
+
     private User readerUser;
 
     @BeforeEach
@@ -54,6 +57,7 @@ class NotificationPreferenceControllerTest {
 
         when(jwtService.extractEmail("valid-token")).thenReturn("reader@test.com");
         when(userRepository.findByEmail("reader@test.com")).thenReturn(java.util.Optional.of(readerUser));
+        when(authenticatedUserResolver.requireCurrentUserId()).thenReturn(10L);
 
         // Set up SecurityContext to simulate authenticated user
         withUser("reader@test.com", UserRole.READER);
@@ -90,9 +94,9 @@ class NotificationPreferenceControllerTest {
             mockMvc.perform(get("/api/notification-preferences")
                             .header("Authorization", "Bearer valid-token"))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.length()").value(1))
-                    .andExpect(jsonPath("$[0].notificationType").value("FRIENDSHIP"))
-                    .andExpect(jsonPath("$[0].isEnabled").value(true));
+                    .andExpect(jsonPath("$._embedded.notificationPreferenceDTOList.length()").value(1))
+                    .andExpect(jsonPath("$._embedded.notificationPreferenceDTOList[0].notificationType").value("FRIENDSHIP"))
+                    .andExpect(jsonPath("$._embedded.notificationPreferenceDTOList[0].isEnabled").value(true));
         }
 
         @Test
@@ -102,7 +106,7 @@ class NotificationPreferenceControllerTest {
             mockMvc.perform(get("/api/notification-preferences")
                             .header("Authorization", "Bearer valid-token"))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.length()").value(0));
+                    .andExpect(jsonPath("$._embedded.notificationPreferenceDTOList").doesNotExist());
         }
 
         @Test
@@ -114,9 +118,9 @@ class NotificationPreferenceControllerTest {
             mockMvc.perform(get("/api/notification-preferences")
                             .header("Authorization", "Bearer valid-token"))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.length()").value(2))
-                    .andExpect(jsonPath("$[1].notificationType").value("SHARED"))
-                    .andExpect(jsonPath("$[1].isEnabled").value(false));
+                    .andExpect(jsonPath("$._embedded.notificationPreferenceDTOList.length()").value(2))
+                    .andExpect(jsonPath("$._embedded.notificationPreferenceDTOList[1].notificationType").value("SHARED"))
+                    .andExpect(jsonPath("$._embedded.notificationPreferenceDTOList[1].isEnabled").value(false));
         }
     }
 

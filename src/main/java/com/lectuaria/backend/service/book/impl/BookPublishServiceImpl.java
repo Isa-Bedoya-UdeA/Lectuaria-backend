@@ -5,6 +5,8 @@ import com.lectuaria.backend.service.book.IBookPublishService;
 import com.lectuaria.backend.dto.book.externalApi.ExternalBookMetadataDTO;
 import com.lectuaria.backend.exception.BookAlreadyExistsInLibraryException;
 import com.lectuaria.backend.exception.ForbiddenException;
+import com.lectuaria.backend.exception.ResourceNotFoundException;
+import com.lectuaria.backend.exception.ValidationException;
 import com.lectuaria.backend.model.auth.User;
 import com.lectuaria.backend.model.auth.UserRole;
 import com.lectuaria.backend.model.book.Author;
@@ -72,13 +74,13 @@ public class BookPublishServiceImpl implements IBookPublishService {
     public BookPublishResponseDTO publishBook(BookPublishRequestDTO request, Long librarianUserId) {
         // 0. Validar ISBN
         if (!ISBNValidator.isValid(String.valueOf(request.getIsbn()))) {
-            throw new RuntimeException(ISBNValidator.getErrorMessage(String.valueOf(request.getIsbn())));
+            throw new ValidationException(ISBNValidator.getErrorMessage(String.valueOf(request.getIsbn())));
         }
 
         // 1. Verificar que el usuario existe y es bibliotecario
         @SuppressWarnings("null")
         User librarianUser = userRepository.findById(librarianUserId)
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado con id: " + librarianUserId));
 
         if (librarianUser.getRole() != UserRole.LIBRARIAN) {
             throw new ForbiddenException("Solo los bibliotecarios pueden publicar libros");
@@ -86,7 +88,7 @@ public class BookPublishServiceImpl implements IBookPublishService {
 
         // 2. Obtener la biblioteca del bibliotecario
         Librarian librarian = librarianRepository.findByUser(librarianUser)
-                .orElseThrow(() -> new RuntimeException("Este usuario no tiene una biblioteca asociada"));
+                .orElseThrow(() -> new ResourceNotFoundException("Este usuario no tiene una biblioteca asociada"));
 
         Library library = librarian.getLibrary();
 
@@ -155,7 +157,7 @@ public class BookPublishServiceImpl implements IBookPublishService {
             }
         }
         if (!genreErrors.isEmpty()) {
-            throw new RuntimeException(
+            throw new ValidationException(
                     "Géneros no válidos: " + String.join("; ", genreErrors) + ". Usa solo los géneros permitidos.");
         }
         book.setGenres(genres);
@@ -200,7 +202,7 @@ public class BookPublishServiceImpl implements IBookPublishService {
 
         // 2. Obtener la biblioteca del bibliotecario
         Librarian librarian = librarianRepository.findByUserId(librarianUserId)
-                .orElseThrow(() -> new RuntimeException("Bibliotecario no encontrado"));
+                .orElseThrow(() -> new ResourceNotFoundException("Bibliotecario no encontrado para el usuario: " + librarianUserId));
         Library library = librarian.getLibrary();
 
         if (localBook.isPresent()) {

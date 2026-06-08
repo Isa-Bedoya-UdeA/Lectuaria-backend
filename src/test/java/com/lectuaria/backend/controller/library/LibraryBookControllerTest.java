@@ -12,6 +12,7 @@ import com.lectuaria.backend.repository.library.LibrarianRepository;
 import com.lectuaria.backend.repository.library.LibraryBookRepository;
 import com.lectuaria.backend.security.JwtService;
 import com.lectuaria.backend.service.book.IBulkUploadService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -56,6 +57,9 @@ class LibraryBookControllerTest {
     @MockBean
     private LibrarianRepository librarianRepository;
 
+    @MockBean
+    private com.lectuaria.backend.security.AuthenticatedUserResolver authenticatedUserResolver;
+
     private void setId(Object entity, Long id) {
         Class<?> clazz = entity.getClass();
         while (clazz != null) {
@@ -76,6 +80,13 @@ class LibraryBookControllerTest {
         when(auth.isAuthenticated()).thenReturn(true);
         when(auth.getName()).thenReturn(user.getEmail());
         SecurityContextHolder.getContext().setAuthentication(auth);
+        when(authenticatedUserResolver.requireCurrentUser(any(jakarta.servlet.http.HttpServletRequest.class)))
+                .thenReturn(user);
+    }
+
+    @BeforeEach
+    void clearSecurity() {
+        SecurityContextHolder.clearContext();
     }
 
     // ========== GET /api/library-books/template ==========

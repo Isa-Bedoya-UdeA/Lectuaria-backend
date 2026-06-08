@@ -60,8 +60,6 @@ public class SecurityConfig {
 
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/libraries").permitAll()
                         .requestMatchers("/api/books/publish/**").permitAll()
-                        .requestMatchers("/api/book-publish/**").permitAll()
-                        .requestMatchers("/api/book-publish-test").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/library-books/**").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/books/library/**").permitAll()
                         .requestMatchers("/api/zones").permitAll()

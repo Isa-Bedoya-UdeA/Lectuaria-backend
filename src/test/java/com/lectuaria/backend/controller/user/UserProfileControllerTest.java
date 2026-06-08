@@ -271,7 +271,7 @@ class UserProfileControllerTest {
 
             mockMvc.perform(get("/api/users/activityuser/activity"))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.length()").value(0));
+                    .andExpect(jsonPath("$._embedded.friendActivityDTOList").doesNotExist());
         }
 
         @Test
@@ -293,10 +293,10 @@ class UserProfileControllerTest {
             mockMvc.perform(get("/api/users/reader/activity")
                             .header("Authorization", authHeader("any.token")))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.length()").value(1))
-                    .andExpect(jsonPath("$[0].userName").value("Reader"))
-                    .andExpect(jsonPath("$[0].activityType").value("BOOK_REVIEWED"))
-                    .andExpect(jsonPath("$[0].bookTitle").value("Reviewed Book"));
+                    .andExpect(jsonPath("$._embedded.friendActivityDTOList.length()").value(1))
+                    .andExpect(jsonPath("$._embedded.friendActivityDTOList[0].userName").value("Reader"))
+                    .andExpect(jsonPath("$._embedded.friendActivityDTOList[0].activityType").value("BOOK_REVIEWED"))
+                    .andExpect(jsonPath("$._embedded.friendActivityDTOList[0].bookTitle").value("Reviewed Book"));
         }
 
         @Test
@@ -317,9 +317,9 @@ class UserProfileControllerTest {
             mockMvc.perform(get("/api/users/x/activity")
                             .header("Authorization", "Bearer bad.token"))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.length()").value(1))
-                    .andExpect(jsonPath("$[0].userName").value("X"))
-                    .andExpect(jsonPath("$[0].listName").value("My List"));
+                    .andExpect(jsonPath("$._embedded.friendActivityDTOList.length()").value(1))
+                    .andExpect(jsonPath("$._embedded.friendActivityDTOList[0].userName").value("X"))
+                    .andExpect(jsonPath("$._embedded.friendActivityDTOList[0].listName").value("My List"));
         }
 
         @Test

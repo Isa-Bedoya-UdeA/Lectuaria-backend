@@ -1,7 +1,14 @@
 package com.lectuaria.backend.exception.list;
 
-public class CannotShareWithSelfException extends RuntimeException {
+import com.lectuaria.backend.exception.ConflictException;
+
+import java.util.List;
+
+/**
+ * Intento de compartir una lista con uno mismo. HTTP 409.
+ */
+public class CannotShareWithSelfException extends ConflictException {
     public CannotShareWithSelfException(String message) {
-        super(message);
+        super(message, List.of("No puedes compartir una lista contigo mismo."));
     }
 }

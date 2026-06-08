@@ -3,6 +3,7 @@ package com.lectuaria.backend.service.book.impl;
 import com.lectuaria.backend.dto.book.*;
 import com.lectuaria.backend.service.book.IBookService;
 import com.lectuaria.backend.service.book.IBookRatingService;
+import com.lectuaria.backend.service.book.search.BookFilterStrategy;
 import com.lectuaria.backend.service.storage.S3StorageService;
 import com.lectuaria.backend.dto.common.PaginatedResponse;
 import com.lectuaria.backend.model.book.Author;
@@ -23,6 +24,7 @@ import com.lectuaria.backend.repository.book.PublisherRepository;
 import com.lectuaria.backend.model.book.Platform;
 import com.lectuaria.backend.repository.auth.UserRepository;
 import com.lectuaria.backend.specification.BookSpecifications;
+import com.lectuaria.backend.exception.ResourceNotFoundException;
 import com.lectuaria.backend.exception.UnauthorizedException;
 import com.lectuaria.backend.util.ISBNValidator;
 import com.lectuaria.backend.model.auth.User;
@@ -75,6 +77,7 @@ public class BookServiceImpl implements IBookService {
     private final UserListBookRepository listBookRepository;
     private final S3StorageService s3StorageService;
     private final ObjectMapper objectMapper;
+    private final List<BookFilterStrategy> bookFilterStrategies;
 
     public BookServiceImpl(BookRepository bookRepository,
             BookEditHistoryRepository bookEditHistoryRepository,
@@ -89,7 +92,8 @@ public class BookServiceImpl implements IBookService {
             EntityManager entityManager,
             UserListBookRepository listBookRepository,
             S3StorageService s3StorageService,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            List<BookFilterStrategy> bookFilterStrategies) {
         this.bookRepository = bookRepository;
         this.bookEditHistoryRepository = bookEditHistoryRepository;
         this.platformRepository = platformRepository;
@@ -104,6 +108,45 @@ public class BookServiceImpl implements IBookService {
         this.listBookRepository = listBookRepository;
         this.s3StorageService = s3StorageService;
         this.objectMapper = objectMapper;
+        this.bookFilterStrategies = bookFilterStrategies;
+    }
+
+    /**
+     * Compone una {@link Specification} de {@link Book} encadenando todas las
+     * {@link BookFilterStrategy} (GoF Strategy) que apliquen al filtro dado.
+     *
+     * Las strategies de filtros simples (rating, ano min, ano max, formato)
+     * viven en este paquete y delegan en {@link BookSpecifications}.
+     * Las strategies de keywords y libraries se mantienen en
+     * {@link BookSpecifications} directamente porque su logica es historica
+     * y usada por otros endpoints; este orquestador las invoca primero
+     * para que cualquier consumidor se beneficie de la composicion.
+     */
+    private Specification<Book> composeFilterSpecifications(BookFilterDTO filter) {
+        Specification<Book> spec = Specification.where(null);
+
+        // Estrategias de BookSpecifications (compatibilidad historica con
+        // endpoints que las consumian directamente).
+        if (filter.getKeywords() != null && !filter.getKeywords().isEmpty()) {
+            spec = spec.and(BookSpecifications.containsKeywords(filter.getKeywords()));
+        }
+        if (filter.getGenreIds() != null && !filter.getGenreIds().isEmpty()) {
+            spec = spec.and(BookSpecifications.hasGenres(filter.getGenreIds()));
+        }
+        if (filter.getLibraryIds() != null && !filter.getLibraryIds().isEmpty()) {
+            spec = spec.and(BookSpecifications.inLibraries(filter.getLibraryIds()));
+        }
+
+        // Estrategias GoF inyectadas (extensibles sin tocar este metodo).
+        for (BookFilterStrategy strategy : bookFilterStrategies) {
+            if (strategy.applies(filter)) {
+                @SuppressWarnings({"unchecked", "rawtypes"})
+                Specification specFromStrategy = (Specification) strategy.toSpec(filter);
+                spec = spec.and(specFromStrategy);
+            }
+        }
+
+        return spec;
     }
 
     public PaginatedResponse<BookSummaryDTO> searchBooks(String keyword, int page, int size) {
@@ -116,19 +159,16 @@ public class BookServiceImpl implements IBookService {
             Integer endYear, List<String> formatTypes, Long userId) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("title").ascending());
 
-        Specification<Book> spec = Specification.where(null);
-        if (minRating != null && minRating > 0) {
-            spec = spec.and(BookSpecifications.hasMinimumRating(minRating));
-        }
-        if (startYear != null) {
-            spec = spec.and(BookSpecifications.hasMinPublicationYear(startYear));
-        }
-        if (endYear != null) {
-            spec = spec.and(BookSpecifications.hasMaxPublicationYear(endYear));
-        }
-        if (formatTypes != null && !formatTypes.isEmpty()) {
-            spec = spec.and(BookSpecifications.hasFormatTypes(formatTypes));
-        }
+        // Encadenamiento de BookFilterStrategy (GoF Strategy).
+        // Cada strategy decide si aporta condicion para este filtro y, si
+        // aporta, devuelve su Specification. Mantener una unica lista
+        // reutilizable para no duplicar este codigo en otros metodos.
+        BookFilterDTO filter = new BookFilterDTO();
+        filter.setMinRating(minRating);
+        filter.setMinYear(startYear);
+        filter.setMaxYear(endYear);
+        filter.setFormatTypes(formatTypes);
+        Specification<Book> spec = composeFilterSpecifications(filter);
 
         Page<Book> bookPage = bookRepository.findAll(spec, pageable);
 
@@ -411,15 +451,10 @@ public class BookServiceImpl implements IBookService {
             List<Long> libraryIds, int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
 
-        Specification<Book> spec = Specification.where(null);
-
-        if (keywords != null && !keywords.isEmpty()) {
-            spec = spec.and(BookSpecifications.containsKeywords(keywords));
-        }
-
-        if (libraryIds != null && !libraryIds.isEmpty()) {
-            spec = spec.and(BookSpecifications.inLibraries(libraryIds));
-        }
+        BookFilterDTO filter = new BookFilterDTO();
+        filter.setKeywords(keywords);
+        filter.setLibraryIds(libraryIds);
+        Specification<Book> spec = composeFilterSpecifications(filter);
 
         @SuppressWarnings("null")
         Page<Book> bookPage = bookRepository.findAll(spec, pageable);
@@ -481,14 +516,14 @@ public class BookServiceImpl implements IBookService {
 
     public void deleteBook(Long bookId, Long userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado con id: " + userId));
 
         if (user.getRole() != UserRole.ADMIN) {
             throw new UnauthorizedException("Solo administradores pueden eliminar libros del sistema");
         }
 
         Book book = bookRepository.findById(bookId)
-                .orElseThrow(() -> new RuntimeException("Libro no encontrado"));
+                .orElseThrow(() -> new ResourceNotFoundException("Libro no encontrado con id: " + bookId));
 
         bookRepository.delete(book);
     }
@@ -593,7 +628,7 @@ public class BookServiceImpl implements IBookService {
 
     private void saveEditHistory(Book book, User user, String oldValueJson, String newValueJson) {
         Librarian librarian = librarianRepository.findByUser(user)
-                .orElseThrow(() -> new RuntimeException("Librarian no encontrado para este usuario"));
+                .orElseThrow(() -> new ResourceNotFoundException("Librarian no encontrado para el usuario: " + user.getId()));
 
         BookEditHistory history = new BookEditHistory();
         history.setBook(book);

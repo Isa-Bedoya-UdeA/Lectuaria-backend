@@ -3,73 +3,71 @@ package com.lectuaria.backend.controller.books;
 import com.lectuaria.backend.dto.book.BookShareRequestDTO;
 import com.lectuaria.backend.dto.book.BookShareResponseDTO;
 import com.lectuaria.backend.dto.book.ShareResultDTO;
-import com.lectuaria.backend.exception.UnauthorizedException;
 import com.lectuaria.backend.model.auth.User;
-import com.lectuaria.backend.repository.auth.UserRepository;
-import com.lectuaria.backend.security.JwtService;
+import com.lectuaria.backend.security.AuthenticatedUserResolver;
 import com.lectuaria.backend.service.book.IBookShareService;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.hateoas.CollectionModel;
+import org.springframework.hateoas.EntityModel;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+
+import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
+import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.methodOn;
 
 @RestController
 @RequestMapping("/api/books")
 public class BookShareController {
 
     private final IBookShareService bookShareService;
-    private final JwtService jwtService;
-    private final UserRepository userRepository;
+    private final AuthenticatedUserResolver userResolver;
 
     public BookShareController(IBookShareService bookShareService,
-                               JwtService jwtService,
-                               UserRepository userRepository) {
+                                AuthenticatedUserResolver userResolver) {
         this.bookShareService = bookShareService;
-        this.jwtService = jwtService;
-        this.userRepository = userRepository;
+        this.userResolver = userResolver;
     }
 
     @PostMapping("/{bookId}/share")
-    public ResponseEntity<ShareResultDTO> shareBook(
+    public ResponseEntity<EntityModel<ShareResultDTO>> shareBook(
             @PathVariable Long bookId,
             @RequestBody BookShareRequestDTO request,
             HttpServletRequest httpRequest) {
-        User sender = extractUser(httpRequest);
+        User sender = userResolver.requireCurrentUser(httpRequest);
         ShareResultDTO result = bookShareService.shareBookWithFriends(bookId, request, sender);
-        return ResponseEntity.ok(result);
+        return ResponseEntity.ok(EntityModel.of(result,
+                linkTo(methodOn(BookShareController.class).shareBook(bookId, request, httpRequest)).withSelfRel(),
+                linkTo(methodOn(BookShareController.class).getReceivedShares(httpRequest)).withRel("received"),
+                linkTo(methodOn(BookShareController.class).getSentShares(httpRequest)).withRel("sent")));
     }
 
     @GetMapping("/shares/received")
-    public ResponseEntity<List<BookShareResponseDTO>> getReceivedShares(HttpServletRequest request) {
-        User user = extractUser(request);
-        return ResponseEntity.ok(bookShareService.getReceivedShares(user));
+    public ResponseEntity<CollectionModel<BookShareResponseDTO>> getReceivedShares(HttpServletRequest request) {
+        User user = userResolver.requireCurrentUser(request);
+        return ResponseEntity.ok(CollectionModel.of(bookShareService.getReceivedShares(user),
+                linkTo(methodOn(BookShareController.class).getReceivedShares(request)).withSelfRel(),
+                linkTo(methodOn(BookShareController.class).getSentShares(request)).withRel("sent")));
     }
 
     @GetMapping("/shares/sent")
-    public ResponseEntity<List<BookShareResponseDTO>> getSentShares(HttpServletRequest request) {
-        User user = extractUser(request);
-        return ResponseEntity.ok(bookShareService.getSentShares(user));
+    public ResponseEntity<CollectionModel<BookShareResponseDTO>> getSentShares(HttpServletRequest request) {
+        User user = userResolver.requireCurrentUser(request);
+        return ResponseEntity.ok(CollectionModel.of(bookShareService.getSentShares(user),
+                linkTo(methodOn(BookShareController.class).getSentShares(request)).withSelfRel(),
+                linkTo(methodOn(BookShareController.class).getReceivedShares(request)).withRel("received")));
     }
 
     @GetMapping("/{bookId}/shared-with/{friendId}")
-    public ResponseEntity<Boolean> isBookSharedWithFriend(
+    public ResponseEntity<EntityModel<java.util.Map<String, Boolean>>> isBookSharedWithFriend(
             @PathVariable Long bookId,
             @PathVariable Long friendId,
             HttpServletRequest request) {
-        User sender = extractUser(request);
+        User sender = userResolver.requireCurrentUser(request);
         boolean isShared = bookShareService.isBookSharedWithFriend(sender.getId(), friendId, bookId);
-        return ResponseEntity.ok(isShared);
-    }
-
-    private User extractUser(HttpServletRequest request) {
-        String authHeader = request.getHeader("Authorization");
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            throw new UnauthorizedException("Token de autorización requerido");
-        }
-        String token = authHeader.substring(7);
-        String email = jwtService.extractEmail(token);
-        return userRepository.findByEmail(email)
-                .orElseThrow(() -> new UnauthorizedException("Usuario no encontrado"));
+        java.util.Map<String, Boolean> body = java.util.Collections.singletonMap("isShared", isShared);
+        return ResponseEntity.ok(EntityModel.of(body,
+                linkTo(methodOn(BookShareController.class).isBookSharedWithFriend(bookId, friendId, request)).withSelfRel()));
     }
 }

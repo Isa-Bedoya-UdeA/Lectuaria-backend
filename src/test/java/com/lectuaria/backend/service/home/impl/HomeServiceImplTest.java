@@ -69,9 +69,15 @@ class HomeServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        List<com.lectuaria.backend.service.home.recommendation.RecommendationStrategy> strategies = List.of(
+                new com.lectuaria.backend.service.home.recommendation.PreferenceBasedRecommendationStrategy(
+                        ratingRepository, listBookRepository, bookRepository),
+                new com.lectuaria.backend.service.home.recommendation.HighRatedRecommendationStrategy(
+                        bookRepository));
         homeService = new HomeServiceImpl(
                 friendshipRepository, listBookRepository, reviewRepository,
-                ratingRepository, bookRepository, bookService, userRecommendationRepository);
+                ratingRepository, bookRepository, bookService, userRecommendationRepository,
+                strategies);
     }
 
     // ===== GET HOME TESTS =====

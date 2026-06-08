@@ -103,7 +103,7 @@ class HomeControllerTest {
                         .header("Authorization", "Bearer " + token)
                         .param("size", "10"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isArray());
+                .andExpect(jsonPath("$._embedded.recommendationDTOList").doesNotExist());
     }
 
     @Test
@@ -120,7 +120,7 @@ class HomeControllerTest {
                         .header("Authorization", "Bearer " + token)
                         .param("size", "20"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isArray());
+                .andExpect(jsonPath("$._embedded.friendActivityDTOList").doesNotExist());
     }
 
     @Test

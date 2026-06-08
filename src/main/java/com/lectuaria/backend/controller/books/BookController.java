@@ -2,95 +2,79 @@ package com.lectuaria.backend.controller.books;
 
 import com.lectuaria.backend.dto.book.BookCatalogItemDTO;
 import com.lectuaria.backend.dto.book.BookDetailDTO;
-import com.lectuaria.backend.dto.book.FeaturedSectionsDTO;
 import com.lectuaria.backend.dto.book.BookFilterDTO;
-import com.lectuaria.backend.dto.book.BookSummaryDTO;
 import com.lectuaria.backend.dto.book.BookPublishRequestDTO;
+import com.lectuaria.backend.dto.book.BookSummaryDTO;
+import com.lectuaria.backend.dto.book.FeaturedSectionsDTO;
 import com.lectuaria.backend.dto.common.PaginatedResponse;
 import com.lectuaria.backend.dto.common.ShareLinkDTO;
-import com.lectuaria.backend.util.LinkGenerationUtil;
-
 import com.lectuaria.backend.exception.ForbiddenException;
 import com.lectuaria.backend.exception.UnauthorizedException;
-
 import com.lectuaria.backend.model.auth.User;
-
 import com.lectuaria.backend.model.auth.UserRole;
-
 import com.lectuaria.backend.model.library.Librarian;
-
-import com.lectuaria.backend.repository.auth.UserRepository;
-
 import com.lectuaria.backend.repository.library.LibrarianRepository;
-
+import com.lectuaria.backend.security.AuthenticatedUserResolver;
 import com.lectuaria.backend.service.book.IBookService;
+import com.lectuaria.backend.util.BookResponseFactory;
+import com.lectuaria.backend.util.HateoasLinkBuilder;
+import com.lectuaria.backend.util.LinkGenerationUtil;
+
+import org.springframework.hateoas.CollectionModel;
+import org.springframework.hateoas.EntityModel;
+import org.springframework.hateoas.PagedModel;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import jakarta.servlet.http.HttpServletRequest;
 
 import java.util.Arrays;
-
 import java.util.List;
 
-import java.util.stream.Collectors;
+import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
+import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.methodOn;
 
-import org.slf4j.Logger;
-
-import org.slf4j.LoggerFactory;
-
-import org.springframework.http.ResponseEntity;
-
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.web.bind.annotation.*;
-
+/**
+ * Endpoints REST para libros.
+ * Las respuestas se sirven como recursos HATEOAS, lo que permite al cliente
+ * descubrir hipermedia relacionada sin acoplarse a URLs hardcodeadas.
+ *
+ * Los enlaces que se exponen siguen el patron REST: cada recurso conoce
+ * su self y las relaciones mas relevantes (similar, ratings, reviews,
+ * share-link, remove-from-library). Las paginas se envuelven en
+ * PagedModel con enlaces first/last/prev/next segun corresponda.
+ */
 @RestController
-
 @RequestMapping("/api/books")
-
 public class BookController {
-    private static final Logger logger = LoggerFactory.getLogger(BookController.class);
+
     private final IBookService bookService;
-    private final UserRepository userRepository;
+    private final AuthenticatedUserResolver userResolver;
     private final LibrarianRepository librarianRepository;
 
     public BookController(IBookService bookService,
-            UserRepository userRepository,
-            LibrarianRepository librarianRepository) {
-
+                          AuthenticatedUserResolver userResolver,
+                          LibrarianRepository librarianRepository) {
         this.bookService = bookService;
-        this.userRepository = userRepository;
+        this.userResolver = userResolver;
         this.librarianRepository = librarianRepository;
     }
 
-    
-
     @GetMapping
-
-    public ResponseEntity<PaginatedResponse<BookSummaryDTO>> getAllBooks(
-
+    public ResponseEntity<PagedModel<EntityModel<BookSummaryDTO>>> getAllBooks(
             @RequestParam(defaultValue = "0") int page,
-
             @RequestParam(defaultValue = "12") int size,
             @RequestParam(required = false) Float minRating,
             @RequestParam(required = false) Integer startYear,
             @RequestParam(required = false) Integer endYear,
             @RequestParam(required = false) List<String> formatTypes) {
-
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        Long userId = null;
-
-        if (authentication != null && authentication.isAuthenticated()) {
-            String email = authentication.getName();
-            User user = userRepository.findByEmail(email).orElse(null);
-            if (user != null) {
-                userId = user.getId();
-            }
-        }
-
-        return ResponseEntity.ok(bookService.getAllBooks(page, size, minRating, startYear, endYear, formatTypes, userId));
-
+        Long userId = userResolver.tryGetCurrentUserId();
+        PaginatedResponse<BookSummaryDTO> response =
+                bookService.getAllBooks(page, size, minRating, startYear, endYear, formatTypes, userId);
+        return ResponseEntity.ok(HateoasLinkBuilder.wrapPage(response, BookController.class, page));
     }
 
     @GetMapping("/search")
-    public ResponseEntity<PaginatedResponse<BookSummaryDTO>> searchBooks(
+    public ResponseEntity<PagedModel<EntityModel<BookSummaryDTO>>> searchBooks(
             @RequestParam(required = false) String keywords,
             @RequestParam(required = false) List<Long> genreIds,
             @RequestParam(required = false) List<Long> libraryIds,
@@ -100,24 +84,14 @@ public class BookController {
             @RequestParam(required = false) Float minRating,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "12") int size) {
-
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        Long userId = null;
-        if (authentication != null && authentication.isAuthenticated()) {
-            User user = userRepository.findByEmail(authentication.getName()).orElse(null);
-            if (user != null) {
-                userId = user.getId();
-            }
-        }
-
+        Long userId = userResolver.tryGetCurrentUserId();
         List<String> keywordList = null;
         if (keywords != null && !keywords.trim().isEmpty()) {
             keywordList = Arrays.stream(keywords.split("[,\\s]+"))
                     .map(String::trim)
                     .filter(k -> !k.isEmpty())
-                    .collect(Collectors.toList());
+                    .toList();
         }
-
         BookFilterDTO filter = new BookFilterDTO();
         filter.setKeywords(keywordList);
         filter.setGenreIds(genreIds);
@@ -126,228 +100,166 @@ public class BookController {
         filter.setMinYear(minYear);
         filter.setMaxYear(maxYear);
         filter.setMinRating(minRating);
-
-        return ResponseEntity.ok(bookService.searchBooksByMultipleFilters(filter, page, size, userId));
+        PaginatedResponse<BookSummaryDTO> response =
+                bookService.searchBooksByMultipleFilters(filter, page, size, userId);
+        return ResponseEntity.ok(HateoasLinkBuilder.wrapPage(response, BookController.class, page));
     }
 
     @GetMapping("/genre/{genreId}")
-
-    public ResponseEntity<PaginatedResponse<BookSummaryDTO>> getBooksByGenre(
-
+    public ResponseEntity<PagedModel<EntityModel<BookSummaryDTO>>> getBooksByGenre(
             @PathVariable Long genreId,
-
             @RequestParam(defaultValue = "0") int page,
-
             @RequestParam(defaultValue = "12") int size) {
-
-        return ResponseEntity.ok(bookService.getBooksByGenre(genreId, page, size));
-
+        return ResponseEntity.ok(HateoasLinkBuilder.wrapPage(
+                bookService.getBooksByGenre(genreId, page, size), BookController.class, page));
     }
 
     @GetMapping("/filter/availability")
-    public ResponseEntity<PaginatedResponse<BookSummaryDTO>> getBooksByFormatAvailability(
+    public ResponseEntity<PagedModel<EntityModel<BookSummaryDTO>>> getBooksByFormatAvailability(
             @RequestParam String format,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "12") int size) {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        Long userId = null;
-        if (authentication != null && authentication.isAuthenticated()) {
-            User user = userRepository.findByEmail(authentication.getName()).orElse(null);
-            if (user != null) {
-                userId = user.getId();
-            }
-        }
-        return ResponseEntity.ok(bookService.getBooksByFormatAvailability(format, page, size, userId));
+        Long userId = userResolver.tryGetCurrentUserId();
+        return ResponseEntity.ok(HateoasLinkBuilder.wrapPage(
+                bookService.getBooksByFormatAvailability(format, page, size, userId),
+                BookController.class, page));
     }
 
     @GetMapping("/library/{libraryId}")
-
-    public ResponseEntity<PaginatedResponse<BookSummaryDTO>> getBooksByLibrary(
+    public ResponseEntity<PagedModel<EntityModel<BookSummaryDTO>>> getBooksByLibrary(
             @PathVariable Long libraryId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "12") int size,
             @RequestParam(required = false) String keyword,
-            @RequestParam(required = false) String sort) {
-        logger.info("BookController: getBooksByLibrary called with libraryId: {}, keyword: {}, sort: {}", libraryId, keyword, sort);
-
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-
-        if (authentication == null || !authentication.isAuthenticated()) {
-            logger.warn("BookController: User is not authenticated for getBooksByLibrary");
-            throw new UnauthorizedException("Usuario no autenticado");
-        }
-
-        String email = authentication.getName();
-        logger.info("BookController: Email extracted from auth context: {}", email);
-
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new UnauthorizedException("Usuario no encontrado"));
-        logger.info("BookController: User found: {} with role: {}", user.getEmail(), user.getRole());
-
+            @RequestParam(required = false) String sort,
+            HttpServletRequest request) {
+        User user = userResolver.requireCurrentUser(request);
         if (user.getRole() != UserRole.LIBRARIAN) {
-            logger.warn("BookController: User {} is not a librarian, role: {}", email, user.getRole());
-            throw new ForbiddenException(
-                    "Acceso denegado: solo bibliotecarios pueden ver el catálogo de su biblioteca");
-
+            throw new ForbiddenException("Acceso denegado: solo bibliotecarios pueden ver el catalogo de su biblioteca");
         }
-
         Librarian librarian = librarianRepository.findByUser(user)
                 .orElseThrow(() -> new UnauthorizedException("Perfil de bibliotecario no encontrado"));
-        logger.info("BookController: Librarian found for user: {}, libraryId: {}", email,
-                librarian.getLibrary().getId());
-
         if (!librarian.getLibrary().getId().equals(libraryId)) {
-            logger.warn("BookController: User {} trying to access library {} but belongs to library {}",
-                    email, libraryId, librarian.getLibrary().getId());
-            throw new ForbiddenException(
-                    "No tienes acceso a esta biblioteca. Solo puedes ver los libros de tu propia biblioteca.");
+            throw new ForbiddenException("No tienes acceso a esta biblioteca.");
         }
-
-        logger.info("BookController: All validations passed, returning books for library: {}", libraryId);
-        return ResponseEntity.ok(bookService.getBooksByLibrary(libraryId, page, size, keyword, sort));
-
+        return ResponseEntity.ok(HateoasLinkBuilder.wrapPage(
+                bookService.getBooksByLibrary(libraryId, page, size, keyword, sort),
+                BookController.class, page));
     }
 
     @GetMapping("/genres")
-
-    public ResponseEntity<PaginatedResponse<BookSummaryDTO>> getBooksByGenres(
+    public ResponseEntity<PagedModel<EntityModel<BookSummaryDTO>>> getBooksByGenres(
             @RequestParam List<Long> genreIds,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "12") int size) {
-        return ResponseEntity.ok(bookService.getBooksByGenres(genreIds, page, size));
-
+        return ResponseEntity.ok(HateoasLinkBuilder.wrapPage(
+                bookService.getBooksByGenres(genreIds, page, size), BookController.class, page));
     }
 
     @GetMapping("/author/{authorId}")
-    public ResponseEntity<PaginatedResponse<BookSummaryDTO>> getBooksByAuthor(
+    public ResponseEntity<PagedModel<EntityModel<BookSummaryDTO>>> getBooksByAuthor(
             @PathVariable Long authorId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "12") int size) {
-        return ResponseEntity.ok(bookService.getBooksByAuthor(authorId, page, size));
-
+        return ResponseEntity.ok(HateoasLinkBuilder.wrapPage(
+                bookService.getBooksByAuthor(authorId, page, size), BookController.class, page));
     }
 
     @GetMapping("/popular")
-    public ResponseEntity<PaginatedResponse<BookSummaryDTO>> getMostPopular(
+    public ResponseEntity<PagedModel<EntityModel<BookSummaryDTO>>> getMostPopular(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "12") int size) {
-        return ResponseEntity.ok(bookService.getMostPopular(page, size));
+        return ResponseEntity.ok(HateoasLinkBuilder.wrapPage(
+                bookService.getMostPopular(page, size), BookController.class, page));
     }
 
     @GetMapping("/top-rated")
-    public ResponseEntity<PaginatedResponse<BookSummaryDTO>> getTopRated(
+    public ResponseEntity<PagedModel<EntityModel<BookSummaryDTO>>> getTopRated(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "12") int size,
             @RequestParam(required = false) Long genreId,
             @RequestParam(required = false) Integer year) {
-        return ResponseEntity.ok(bookService.getTopRated(page, size, genreId, year));
+        return ResponseEntity.ok(HateoasLinkBuilder.wrapPage(
+                bookService.getTopRated(page, size, genreId, year), BookController.class, page));
     }
 
     @GetMapping("/new-catalog")
-    public ResponseEntity<PaginatedResponse<BookCatalogItemDTO>> getNewCatalogBooks(
+    public ResponseEntity<PagedModel<EntityModel<BookCatalogItemDTO>>> getNewCatalogBooks(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "12") int size,
             @RequestParam(required = false) Long genreId) {
-        return ResponseEntity.ok(bookService.getNewCatalogBooks(page, size, genreId));
+        return ResponseEntity.ok(HateoasLinkBuilder.wrapPage(
+                bookService.getNewCatalogBooks(page, size, genreId), BookController.class, page));
     }
 
     @GetMapping("/featured")
-    public ResponseEntity<FeaturedSectionsDTO> getFeaturedSections() {
-        return ResponseEntity.ok(bookService.getFeaturedSections());
+    public ResponseEntity<EntityModel<FeaturedSectionsDTO>> getFeaturedSections() {
+        return ResponseEntity.ok(EntityModel.of(bookService.getFeaturedSections(),
+                linkTo(methodOn(BookController.class).getFeaturedSections()).withSelfRel(),
+                linkTo(methodOn(BookController.class).getMostPopular(0, 12)).withRel("popular"),
+                linkTo(methodOn(BookController.class).getTopRated(0, 12, null, null)).withRel("top-rated"),
+                linkTo(methodOn(BookController.class).getNewCatalogBooks(0, 12, null)).withRel("new-catalog")));
     }
 
-    // ========== DETALLES ==========
-
     @GetMapping("/{id}")
-    public ResponseEntity<BookDetailDTO> getBookById(@PathVariable Long id) {
-        return ResponseEntity.ok(bookService.getBookById(id));
+    public ResponseEntity<EntityModel<BookDetailDTO>> getBookById(@PathVariable Long id) {
+        BookDetailDTO book = bookService.getBookById(id);
+        // Design Pattern: Factory Method (GoF) — BookResponseFactory centraliza
+        // los enlaces hipermedia del recurso libro para que cualquier
+        // endpoint que lo exponga use la misma semantica.
+        return ResponseEntity.ok(BookResponseFactory.wrap(book));
     }
 
     @GetMapping("/{id}/similar")
-    public ResponseEntity<List<BookSummaryDTO>> getSimilarBooks(@PathVariable Long id) {
-        return ResponseEntity.ok(bookService.getSimilarBooks(id));
+    public ResponseEntity<CollectionModel<BookSummaryDTO>> getSimilarBooks(@PathVariable Long id) {
+        return ResponseEntity.ok(CollectionModel.of(bookService.getSimilarBooks(id),
+                linkTo(methodOn(BookController.class).getSimilarBooks(id)).withSelfRel(),
+                linkTo(methodOn(BookController.class).getBookById(id)).withRel("book")));
     }
 
     @GetMapping("/{id}/share-link")
-    public ResponseEntity<ShareLinkDTO> getBookShareLink(@PathVariable Long id) {
+    public ResponseEntity<EntityModel<ShareLinkDTO>> getBookShareLink(@PathVariable Long id) {
         String url = LinkGenerationUtil.generateBookShareLink(id);
-        return ResponseEntity.ok(new ShareLinkDTO(url, "book"));
+        ShareLinkDTO payload = new ShareLinkDTO(url, "book");
+        return ResponseEntity.ok(EntityModel.of(payload,
+                linkTo(methodOn(BookController.class).getBookShareLink(id)).withSelfRel(),
+                linkTo(methodOn(BookController.class).getBookById(id)).withRel("book")));
     }
 
     @GetMapping("/isbn/{isbn}")
-    public ResponseEntity<BookDetailDTO> getBookByIsbn(@PathVariable Long isbn) {
-        return ResponseEntity.ok(bookService.getBookByIsbn(isbn));
+    public ResponseEntity<EntityModel<BookDetailDTO>> getBookByIsbn(@PathVariable Long isbn) {
+        BookDetailDTO book = bookService.getBookByIsbn(isbn);
+        return ResponseEntity.ok(EntityModel.of(book,
+                linkTo(methodOn(BookController.class).getBookByIsbn(isbn)).withSelfRel(),
+                linkTo(methodOn(BookController.class).getBookById(book.getId())).withRel("by-id")));
     }
 
     @DeleteMapping("/{id}/library")
-    public ResponseEntity<String> removeBookFromLibrary(@PathVariable Long id) {
-
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        logger.info("BookController: Remove book from library by user: {}", authentication.getName());
-
-        if (authentication == null || !authentication.isAuthenticated()) {
-            logger.warn("BookController: User is not authenticated");
-            throw new UnauthorizedException("Usuario no autenticado");
-        }
-
-        String email = authentication.getName();
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> {
-                    logger.error("BookController: User not found with email: {}", email);
-                    return new UnauthorizedException("Usuario no encontrado");
-                });
-
-        logger.info("BookController: Removing book {} from library for user: {}, role: {}", id, email, user.getRole());
+    public ResponseEntity<EntityModel<String>> removeBookFromLibrary(@PathVariable Long id,
+                                                                    HttpServletRequest request) {
+        User user = userResolver.requireCurrentUser(request);
         bookService.removeBookFromLibrary(id, user.getId());
-        return ResponseEntity.ok("Libro eliminado de la biblioteca exitosamente.");
+        return ResponseEntity.ok(EntityModel.of("Libro eliminado de la biblioteca exitosamente.",
+                linkTo(methodOn(BookController.class).getBookById(id)).withRel("book")));
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<String> deleteBook(@PathVariable Long id) {
-
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        logger.info("BookController: Delete book by user: {}", authentication.getName());
-
-        if (authentication == null || !authentication.isAuthenticated()) {
-            logger.warn("BookController: User is not authenticated");
-            throw new UnauthorizedException("Usuario no autenticado");
-        }
-
-        String email = authentication.getName();
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> {
-                    logger.error("BookController: User not found with email: {}", email);
-                    return new UnauthorizedException("Usuario no encontrado");
-                });
-
-        logger.info("BookController: Deleting book {} for user: {}, role: {}", id, email, user.getRole());
+    public ResponseEntity<EntityModel<String>> deleteBook(@PathVariable Long id,
+                                                         HttpServletRequest request) {
+        User user = userResolver.requireCurrentUser(request);
         bookService.deleteBook(id, user.getId());
-        return ResponseEntity.ok("Libro eliminado del sistema exitosamente.");
+        return ResponseEntity.ok(EntityModel.of("Libro eliminado del sistema exitosamente.",
+                linkTo(methodOn(BookController.class).getAllBooks(0, 12, null, null, null, null)).withRel("books")));
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<BookDetailDTO> updateBook(
+    public ResponseEntity<EntityModel<BookDetailDTO>> updateBook(
             @PathVariable Long id,
-            @RequestBody BookPublishRequestDTO requestDto) {
-
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        logger.info("BookController: Update book by user: {}", authentication.getName());
-
-        if (authentication == null || !authentication.isAuthenticated()) {
-            logger.warn("BookController: User is not authenticated");
-            throw new UnauthorizedException("Usuario no autenticado");
-        }
-
-        String email = authentication.getName();
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> {
-                    logger.error("BookController: User not found with email: {}", email);
-                    return new UnauthorizedException("Usuario no encontrado");
-                });
-
-        logger.info("BookController: Updating book {} for user: {}, role: {}", id, email, user.getRole());
+            @RequestBody BookPublishRequestDTO requestDto,
+            HttpServletRequest request) {
+        User user = userResolver.requireCurrentUser(request);
         BookDetailDTO updatedBook = bookService.updateBook(id, requestDto, user.getId());
-        return ResponseEntity.ok(updatedBook);
+        return ResponseEntity.ok(EntityModel.of(updatedBook,
+                linkTo(methodOn(BookController.class).getBookById(id)).withSelfRel()));
     }
-
 }

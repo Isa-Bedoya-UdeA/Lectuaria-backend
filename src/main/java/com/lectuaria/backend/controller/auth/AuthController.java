@@ -15,6 +15,7 @@ import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
+import org.springframework.hateoas.EntityModel;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
@@ -23,6 +24,9 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.Arrays;
 import java.util.Map;
+
+import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
+import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.methodOn;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -37,9 +41,11 @@ public class AuthController {
     }
 
     @PostMapping("/register")
-    @ResponseStatus(HttpStatus.CREATED)
-    public RegisterResponseDTO register(@Valid @RequestBody RegisterRequestDTO request) {
-        return authService.register(request);
+    public ResponseEntity<EntityModel<RegisterResponseDTO>> register(@Valid @RequestBody RegisterRequestDTO request) {
+        RegisterResponseDTO body = authService.register(request);
+        EntityModel<RegisterResponseDTO> model = EntityModel.of(body);
+        model.add(linkTo(methodOn(AuthController.class).login(new LoginRequestDTO(), null, null)).withRel("login"));
+        return ResponseEntity.status(HttpStatus.CREATED).body(model);
     }
 
     @PostMapping("/login")
@@ -94,16 +100,22 @@ public class AuthController {
     }
 
     @GetMapping("/me")
-    public ProfileResponseDTO getMyProfile(HttpServletRequest request) {
+    public ResponseEntity<EntityModel<ProfileResponseDTO>> getMyProfile(HttpServletRequest request) {
         String email = extractEmail(request);
-        return authService.getProfile(email);
+        ProfileResponseDTO profile = authService.getProfile(email);
+        return ResponseEntity.ok(EntityModel.of(profile,
+                linkTo(methodOn(AuthController.class).getMyProfile(request)).withSelfRel(),
+                linkTo(methodOn(AuthController.class).updateMyProfile(request, null)).withRel("update"),
+                linkTo(methodOn(AuthController.class).changePassword(request, null)).withRel("change-password")));
     }
 
     @PutMapping("/me")
-    public ProfileResponseDTO updateMyProfile(HttpServletRequest request,
+    public ResponseEntity<EntityModel<ProfileResponseDTO>> updateMyProfile(HttpServletRequest request,
             @Valid @RequestBody ProfileUpdateRequestDTO profileUpdateRequest) {
         String email = extractEmail(request);
-        return authService.updateProfile(email, profileUpdateRequest);
+        ProfileResponseDTO profile = authService.updateProfile(email, profileUpdateRequest);
+        return ResponseEntity.ok(EntityModel.of(profile,
+                linkTo(methodOn(AuthController.class).updateMyProfile(request, profileUpdateRequest)).withSelfRel()));
     }
 
     @PostMapping("/change-password")

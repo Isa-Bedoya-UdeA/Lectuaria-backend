@@ -48,6 +48,9 @@ class BookShareControllerTest {
     @MockBean
     private UserRepository userRepository;
 
+    @MockBean
+    private com.lectuaria.backend.security.AuthenticatedUserResolver authenticatedUserResolver;
+
     private User readerUser;
 
     @BeforeEach
@@ -57,6 +60,8 @@ class BookShareControllerTest {
 
         when(jwtService.extractEmail("valid-token")).thenReturn("reader@test.com");
         when(userRepository.findByEmail("reader@test.com")).thenReturn(java.util.Optional.of(readerUser));
+        when(authenticatedUserResolver.requireCurrentUser(any(jakarta.servlet.http.HttpServletRequest.class)))
+                .thenReturn(readerUser);
     }
 
     private void setId(Object entity, Long id) {
@@ -121,10 +126,10 @@ class BookShareControllerTest {
             mockMvc.perform(get("/api/books/shares/received")
                             .header("Authorization", "Bearer valid-token"))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.length()").value(1))
-                    .andExpect(jsonPath("$[0].bookTitle").value("Test Book"))
-                    .andExpect(jsonPath("$[0].senderId").value(1))
-                    .andExpect(jsonPath("$[0].receiverId").value(10));
+                    .andExpect(jsonPath("$._embedded.bookShareResponseDTOList.length()").value(1))
+                    .andExpect(jsonPath("$._embedded.bookShareResponseDTOList[0].bookTitle").value("Test Book"))
+                    .andExpect(jsonPath("$._embedded.bookShareResponseDTOList[0].senderId").value(1))
+                    .andExpect(jsonPath("$._embedded.bookShareResponseDTOList[0].receiverId").value(10));
         }
 
         @Test
@@ -134,7 +139,7 @@ class BookShareControllerTest {
             mockMvc.perform(get("/api/books/shares/received")
                             .header("Authorization", "Bearer valid-token"))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.length()").value(0));
+                    .andExpect(jsonPath("$._embedded.bookShareResponseDTOList").doesNotExist());
         }
     }
 
@@ -152,8 +157,8 @@ class BookShareControllerTest {
             mockMvc.perform(get("/api/books/shares/sent")
                             .header("Authorization", "Bearer valid-token"))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.length()").value(1))
-                    .andExpect(jsonPath("$[0].bookTitle").value("Test Book"));
+                    .andExpect(jsonPath("$._embedded.bookShareResponseDTOList.length()").value(1))
+                    .andExpect(jsonPath("$._embedded.bookShareResponseDTOList[0].bookTitle").value("Test Book"));
         }
 
         @Test
@@ -163,7 +168,7 @@ class BookShareControllerTest {
             mockMvc.perform(get("/api/books/shares/sent")
                             .header("Authorization", "Bearer valid-token"))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.length()").value(0));
+                    .andExpect(jsonPath("$._embedded.bookShareResponseDTOList").doesNotExist());
         }
     }
 
@@ -179,7 +184,7 @@ class BookShareControllerTest {
             mockMvc.perform(get("/api/books/100/shared-with/2")
                             .header("Authorization", "Bearer valid-token"))
                     .andExpect(status().isOk())
-                    .andExpect(content().string("true"));
+                    .andExpect(jsonPath("$.isShared").value(true));
         }
 
         @Test
@@ -189,7 +194,7 @@ class BookShareControllerTest {
             mockMvc.perform(get("/api/books/100/shared-with/2")
                             .header("Authorization", "Bearer valid-token"))
                     .andExpect(status().isOk())
-                    .andExpect(content().string("false"));
+                    .andExpect(jsonPath("$.isShared").value(false));
         }
     }
 }

@@ -3,6 +3,7 @@ package com.lectuaria.backend.service.book.impl;
 import com.lectuaria.backend.dto.book.BookShareRequestDTO;
 import com.lectuaria.backend.dto.book.BookShareResponseDTO;
 import com.lectuaria.backend.dto.book.ShareResultDTO;
+import com.lectuaria.backend.event.BookSharedEvent;
 import com.lectuaria.backend.exception.ResourceNotFoundException;
 import com.lectuaria.backend.model.auth.User;
 import com.lectuaria.backend.model.auth.UserRole;
@@ -17,9 +18,11 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.time.Instant;
 import java.util.List;
@@ -45,6 +48,9 @@ class BookShareServiceImplTest {
 
     @Mock
     private INotificationService notificationService;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private BookShareServiceImpl service;
@@ -129,7 +135,8 @@ class BookShareServiceImplTest {
             assertThat(result.getSuccessfulShares()).isEqualTo(2);
             assertThat(result.getFailedShares()).isEqualTo(0);
             assertThat(result.getErrorMessages()).isEmpty();
-            verify(notificationService, times(2)).createNotification(any(), any(), any(), any());
+            // Design Pattern: Observer (GoF) — verificamos que se publicaron 2 eventos
+            verify(eventPublisher, times(2)).publishEvent(any(BookSharedEvent.class));
         }
 
         @Test
@@ -163,8 +170,13 @@ class BookShareServiceImplTest {
 
             service.shareBookWithFriends(100L, request, sender);
 
-            verify(notificationService).createNotification(
-                    eq(2L), any(), contains("Must read!"), eq(9781234567890L));
+            // Design Pattern: Observer (GoF) — capturamos el evento y verificamos el contenido
+            ArgumentCaptor<BookSharedEvent> captor = ArgumentCaptor.forClass(BookSharedEvent.class);
+            verify(eventPublisher).publishEvent(captor.capture());
+            BookSharedEvent event = captor.getValue();
+            assertThat(event.getReceiver().getId()).isEqualTo(2L);
+            assertThat(event.getMessage()).isEqualTo("Must read!");
+            assertThat(event.getBook().getIsbn()).isEqualTo(9781234567890L);
         }
 
         @Test
@@ -182,8 +194,13 @@ class BookShareServiceImplTest {
 
             service.shareBookWithFriends(100L, request, sender);
 
-            verify(notificationService).createNotification(
-                    eq(2L), any(), contains("te ha compartido este libro: Test Book"), eq(9781234567890L));
+            // Design Pattern: Observer (GoF) — capturamos el evento y verificamos el contenido
+            ArgumentCaptor<BookSharedEvent> captor = ArgumentCaptor.forClass(BookSharedEvent.class);
+            verify(eventPublisher).publishEvent(captor.capture());
+            BookSharedEvent event = captor.getValue();
+            assertThat(event.getReceiver().getId()).isEqualTo(2L);
+            // Empty message -> el listener construye el default "te ha compartido este libro: Test Book"
+            assertThat(event.getMessage()).isEmpty();
         }
     }
 

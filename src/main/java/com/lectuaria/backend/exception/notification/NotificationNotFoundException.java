@@ -1,7 +1,13 @@
 package com.lectuaria.backend.exception.notification;
 
-public class NotificationNotFoundException extends RuntimeException {
+import com.lectuaria.backend.exception.DomainException;
+import org.springframework.http.HttpStatus;
+
+/**
+ * Notificacion no encontrada. HTTP 404.
+ */
+public class NotificationNotFoundException extends DomainException {
     public NotificationNotFoundException(String message) {
-        super(message);
+        super(message, HttpStatus.NOT_FOUND, "NOTIFICATION_NOT_FOUND");
     }
 }

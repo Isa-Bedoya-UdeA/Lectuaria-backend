@@ -19,6 +19,7 @@ import com.lectuaria.backend.repository.friendship.FriendshipRepository;
 import com.lectuaria.backend.repository.list.UserListBookRepository;
 import com.lectuaria.backend.service.book.IBookService;
 import com.lectuaria.backend.service.home.IHomeService;
+import com.lectuaria.backend.service.home.recommendation.RecommendationStrategy;
 import com.lectuaria.backend.model.book.UserRecommendation;
 import com.lectuaria.backend.repository.book.UserRecommendationRepository;
 import org.springframework.data.domain.PageRequest;
@@ -51,10 +52,12 @@ public class HomeServiceImpl implements IHomeService {
     private final BookRepository bookRepository;
     private final IBookService bookService;
     private final UserRecommendationRepository userRecommendationRepository;
+    private final List<RecommendationStrategy> recommendationStrategies;
 
     public HomeServiceImpl(FriendshipRepository friendshipRepository, UserListBookRepository listBookRepository,
             BookReviewRepository reviewRepository, BookRatingRepository ratingRepository, BookRepository bookRepository,
-            IBookService bookService, UserRecommendationRepository userRecommendationRepository) {
+            IBookService bookService, UserRecommendationRepository userRecommendationRepository,
+            List<RecommendationStrategy> recommendationStrategies) {
         this.friendshipRepository = friendshipRepository;
         this.listBookRepository = listBookRepository;
         this.reviewRepository = reviewRepository;
@@ -62,6 +65,7 @@ public class HomeServiceImpl implements IHomeService {
         this.bookRepository = bookRepository;
         this.bookService = bookService;
         this.userRecommendationRepository = userRecommendationRepository;
+        this.recommendationStrategies = recommendationStrategies;
     }
 
     public HomeResponseDTO getHome(User user, Long genreId) {
@@ -101,22 +105,34 @@ public class HomeServiceImpl implements IHomeService {
         excludedIds.addAll(listBookRepository.findBookIdsByUserId(user.getId()));
         excludedIds.addAll(userRecommendationRepository.findHiddenBookIdsByUserId(user.getId()));
 
-        List<Object[]> genreRows = new ArrayList<>();
-        genreRows.addAll(ratingRepository.findTopGenresByUserRatings(user.getId(), PageRequest.of(0, 10)));
-        genreRows.addAll(listBookRepository.findTopGenresByUserLists(user.getId(), PageRequest.of(0, 10)));
-
+        // Mapa de generos preferidos del usuario, para personalizar las razones.
         LinkedHashMap<Long, String> genreNames = new LinkedHashMap<>();
-        for (Object[] row : genreRows) {
+        for (Object[] row : ratingRepository.findTopGenresByUserRatings(user.getId(), PageRequest.of(0, 10))) {
+            genreNames.putIfAbsent(((Number) row[0]).longValue(), (String) row[1]);
+        }
+        for (Object[] row : listBookRepository.findTopGenresByUserLists(user.getId(), PageRequest.of(0, 10))) {
             genreNames.putIfAbsent(((Number) row[0]).longValue(), (String) row[1]);
         }
 
-        List<Book> candidates = genreNames.isEmpty()
-                ? new ArrayList<>()
-                : new ArrayList<>(bookRepository.findRecommendationsByGenreIds(new ArrayList<>(genreNames.keySet()),
-                        PageRequest.of(0, requestedSize * 5)));
-
-        if (candidates.size() < requestedSize) {
-            candidates.addAll(bookRepository.findFallbackRecommendations(PageRequest.of(0, requestedSize * 5)));
+        // Orquestacion de la cadena de RecommendationStrategy (GoF Strategy).
+        // Cada estrategia aporta candidatos; se filtran los excluidos y se
+        // desduplican. Si tras la primera cadena no hay suficientes, se cae
+        // a la siguiente (e.g. fallback de "libros populares con rating alto").
+        List<Book> candidates = new ArrayList<>();
+        for (RecommendationStrategy strategy : recommendationStrategies) {
+            if (candidates.size() >= requestedSize) {
+                break;
+            }
+            try {
+                List<Book> fromStrategy = strategy.selectCandidates(user, requestedSize * 5);
+                if (fromStrategy != null) {
+                    candidates.addAll(fromStrategy);
+                }
+            } catch (Exception e) {
+                // Una estrategia que falla no debe tumbar toda la cadena.
+                org.slf4j.LoggerFactory.getLogger(HomeServiceImpl.class)
+                        .warn("Recommendation strategy {} failed: {}", strategy.name(), e.getMessage());
+            }
         }
 
         Set<Long> seen = new HashSet<>();
@@ -128,14 +144,24 @@ public class HomeServiceImpl implements IHomeService {
 
         Instant generatedAt = Instant.now();
         List<UserRecommendation> newRecs = new ArrayList<>();
-        int index = 0;
         for (Book book : selectedBooks) {
-            String reason = buildRecommendationReason(book, genreNames);
+            // Construir la razon desde la primera estrategia que aporte una.
+            // Esto preserva el comportamiento original: si preference-based
+            // no matchea el genero, se usa el mensaje de fallback.
+            String reason = null;
+            for (RecommendationStrategy strategy : recommendationStrategies) {
+                reason = strategy.buildReason(book, genreNames);
+                if (reason != null) {
+                    break;
+                }
+            }
+            if (reason == null) {
+                reason = "Sugerido para ti";
+            }
             BigDecimal score = buildRecommendationScore(book);
             UserRecommendation rec = new UserRecommendation(user, book, reason, score);
             rec.setCalculatedAt(generatedAt);
             newRecs.add(rec);
-            index++;
         }
 
         userRecommendationRepository.saveAll(newRecs);

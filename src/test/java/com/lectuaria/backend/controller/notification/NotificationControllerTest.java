@@ -110,10 +110,10 @@ class NotificationControllerTest {
             mockMvc.perform(get("/api/notifications")
                             .header("Authorization", authHeader("any-token")))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.length()").value(2))
-                    .andExpect(jsonPath("$[0].message").value("New friend request"))
-                    .andExpect(jsonPath("$[0].read").value(false))
-                    .andExpect(jsonPath("$[1].read").value(true));
+                    .andExpect(jsonPath("$._embedded.notificationDTOList.length()").value(2))
+                    .andExpect(jsonPath("$._embedded.notificationDTOList[0].message").value("New friend request"))
+                    .andExpect(jsonPath("$._embedded.notificationDTOList[0].read").value(false))
+                    .andExpect(jsonPath("$._embedded.notificationDTOList[1].read").value(true));
         }
 
         @Test
@@ -135,8 +135,8 @@ class NotificationControllerTest {
                             .header("Authorization", authHeader("any-token"))
                             .param("unreadOnly", "true"))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.length()").value(1))
-                    .andExpect(jsonPath("$[0].read").value(false));
+                    .andExpect(jsonPath("$._embedded.notificationDTOList.length()").value(1))
+                    .andExpect(jsonPath("$._embedded.notificationDTOList[0].read").value(false));
         }
     }
 
@@ -154,7 +154,7 @@ class NotificationControllerTest {
             mockMvc.perform(get("/api/notifications/unread-count")
                             .header("Authorization", authHeader("any-token")))
                     .andExpect(status().isOk())
-                    .andExpect(content().string("5"));
+                    .andExpect(jsonPath("$.unreadCount").value(5));
         }
 
         @Test
@@ -166,7 +166,7 @@ class NotificationControllerTest {
             mockMvc.perform(get("/api/notifications/unread-count")
                             .header("Authorization", authHeader("any-token")))
                     .andExpect(status().isOk())
-                    .andExpect(content().string("0"));
+                    .andExpect(jsonPath("$.unreadCount").value(0));
         }
     }
 

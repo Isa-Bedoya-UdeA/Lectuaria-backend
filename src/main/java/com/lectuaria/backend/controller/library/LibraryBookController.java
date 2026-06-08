@@ -6,76 +6,56 @@ import com.lectuaria.backend.exception.UnauthorizedException;
 import com.lectuaria.backend.model.auth.User;
 import com.lectuaria.backend.model.auth.UserRole;
 import com.lectuaria.backend.model.book.LibraryBook;
-import com.lectuaria.backend.repository.auth.UserRepository;
 import com.lectuaria.backend.repository.library.LibrarianRepository;
 import com.lectuaria.backend.repository.library.LibraryBookRepository;
-import com.lectuaria.backend.security.JwtService;
+import com.lectuaria.backend.security.AuthenticatedUserResolver;
 import com.lectuaria.backend.service.book.IBulkUploadService;
-
 import jakarta.servlet.http.HttpServletRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.hateoas.EntityModel;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
+import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
+import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.methodOn;
 
 @RestController
 @RequestMapping("/api/library-books")
 public class LibraryBookController {
 
     private static final Logger logger = LoggerFactory.getLogger(LibraryBookController.class);
-    private final UserRepository userRepository;
-    private final JwtService jwtService;
     private final IBulkUploadService bulkUploadService;
     private final LibraryBookRepository libraryBookRepository;
     private final LibrarianRepository librarianRepository;
+    private final AuthenticatedUserResolver userResolver;
 
     public LibraryBookController(
-            UserRepository userRepository,
-            JwtService jwtService,
             IBulkUploadService bulkUploadService,
             LibraryBookRepository libraryBookRepository,
-            LibrarianRepository librarianRepository) {
-        this.userRepository = userRepository;
-        this.jwtService = jwtService;
+            LibrarianRepository librarianRepository,
+            AuthenticatedUserResolver userResolver) {
         this.bulkUploadService = bulkUploadService;
         this.libraryBookRepository = libraryBookRepository;
         this.librarianRepository = librarianRepository;
+        this.userResolver = userResolver;
     }
 
     @PostMapping("/bulk-upload")
-    public ResponseEntity<BulkUploadResultDTO> bulkUpload(
-            @RequestParam("file") MultipartFile file) {
-
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+    public ResponseEntity<EntityModel<BulkUploadResultDTO>> bulkUpload(
+            @RequestParam("file") MultipartFile file,
+            HttpServletRequest httpRequest) {
         logger.info("Bulk upload initiated");
-
-        if (authentication == null || !authentication.isAuthenticated()) {
-            logger.warn("User is not authenticated");
-            throw new UnauthorizedException("Usuario no autenticado");
-        }
-
-        String email = authentication.getName();
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> {
-                    logger.error("User not found");
-                    return new UnauthorizedException("Usuario no encontrado");
-                });
-
-        logger.info("User found");
-
-        if (user.getRole() != UserRole.LIBRARIAN) {
-            logger.warn("User is not a librarian");
-            throw new UnauthorizedException("Acceso denegado: solo bibliotecarios pueden realizar esta acción");
-        }
-
-        Long userId = user.getId();
-        logger.info("Processing CSV upload for userId: {}", userId);
-        return ResponseEntity.ok(bulkUploadService.processCsv(file, userId));
+        User user = userResolver.requireCurrentUser(httpRequest);
+        requireLibrarianRole(user);
+        logger.info("Processing CSV upload for userId: {}", user.getId());
+        BulkUploadResultDTO result = bulkUploadService.processCsv(file, user.getId());
+        return ResponseEntity.ok(EntityModel.of(result,
+                linkTo(methodOn(LibraryBookController.class).bulkUpload(file, httpRequest)).withSelfRel(),
+                linkTo(methodOn(LibraryBookController.class).downloadTemplate()).withRel("template")));
     }
 
     @GetMapping("/template")
@@ -90,41 +70,21 @@ public class LibraryBookController {
                 .body(csv.getBytes());
     }
 
-    /**
-     * Actualiza la disponibilidad de un libro en la biblioteca del bibliotecario autenticado.
-     * El bibliotecario puede editar: copias físicas, disponibilidad digital y plataforma digital.
-     * Solo funciona si el bibliotecario tiene ese libro en SU biblioteca.
-     */
     @PatchMapping("/{bookId}/availability")
-    public ResponseEntity<LibraryBookAvailabilityDTO> updateAvailability(
+    public ResponseEntity<EntityModel<LibraryBookAvailabilityDTO>> updateAvailability(
             @PathVariable Long bookId,
             @RequestBody LibraryBookAvailabilityDTO request,
             HttpServletRequest httpRequest) {
+        User user = userResolver.requireCurrentUser(httpRequest);
+        requireLibrarianRole(user);
 
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated()) {
-            throw new UnauthorizedException("Usuario no autenticado");
-        }
-
-        String email = authentication.getName();
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new UnauthorizedException("Usuario no encontrado"));
-
-        if (user.getRole() != UserRole.LIBRARIAN) {
-            throw new UnauthorizedException("Acceso denegado: solo bibliotecarios pueden editar la disponibilidad");
-        }
-
-        // Obtener el libraryId del bibliotecario
         var librarian = librarianRepository.findByUser(user)
                 .orElseThrow(() -> new UnauthorizedException("Perfil de bibliotecario no encontrado"));
-
         Long libraryId = librarian.getLibrary().getId();
 
-        // Buscar el LibraryBook que conecta la biblioteca del librarian con el libro
         LibraryBook libraryBook = libraryBookRepository.findByLibraryIdAndBookId(libraryId, bookId)
                 .orElseThrow(() -> new RuntimeException("Este libro no está en tu biblioteca"));
 
-        // Actualizar solo los campos de disponibilidad
         if (request.getPhysicalCopies() != null) {
             libraryBook.setPhysicalCopies(request.getPhysicalCopies());
         }
@@ -136,13 +96,19 @@ public class LibraryBookController {
         }
 
         libraryBookRepository.save(libraryBook);
-
         logger.info("Availability updated for book {} in library {} by user {}", bookId, libraryId, user.getId());
 
-        return ResponseEntity.ok(new LibraryBookAvailabilityDTO(
+        LibraryBookAvailabilityDTO response = new LibraryBookAvailabilityDTO(
                 libraryBook.getPhysicalCopies(),
                 libraryBook.getDigitalAvailable(),
-                libraryBook.getDigitalPlatform()
-        ));
+                libraryBook.getDigitalPlatform());
+        return ResponseEntity.ok(EntityModel.of(response,
+                linkTo(methodOn(LibraryBookController.class).updateAvailability(bookId, request, httpRequest)).withSelfRel()));
+    }
+
+    private void requireLibrarianRole(User user) {
+        if (user.getRole() != UserRole.LIBRARIAN) {
+            throw new UnauthorizedException("Acceso denegado: solo bibliotecarios pueden realizar esta acción");
+        }
     }
 }

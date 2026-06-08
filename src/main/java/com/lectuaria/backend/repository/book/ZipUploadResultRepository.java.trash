@@ -1,9 +1,0 @@
-package com.lectuaria.backend.repository.book;
-
-import com.lectuaria.backend.model.book.ZipUploadResult;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
-
-@Repository
-public interface ZipUploadResultRepository extends JpaRepository<ZipUploadResult, Long> {
-}

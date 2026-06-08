@@ -243,7 +243,7 @@ class BookPublishServiceImplTest {
             when(librarianRepository.findByUser(librarianUser)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.publishBook(request, 1L))
-                    .isInstanceOf(RuntimeException.class)
+                    .isInstanceOf(com.lectuaria.backend.exception.ResourceNotFoundException.class)
                     .hasMessageContaining("no tiene una biblioteca");
         }
 
@@ -257,7 +257,7 @@ class BookPublishServiceImplTest {
             when(genreRepository.findByName("Fiction")).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.publishBook(request, 1L))
-                    .isInstanceOf(RuntimeException.class)
+                    .isInstanceOf(com.lectuaria.backend.exception.ValidationException.class)
                     .hasMessageContaining("no existe en la plataforma");
         }
 
@@ -364,8 +364,8 @@ class BookPublishServiceImplTest {
             when(librarianRepository.findByUserId(1L)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.prefillFromOpenLibrary(9781234567890L, 1L))
-                    .isInstanceOf(RuntimeException.class)
-                    .hasMessage("Bibliotecario no encontrado");
+                    .isInstanceOf(com.lectuaria.backend.exception.ResourceNotFoundException.class)
+                    .hasMessageContaining("Bibliotecario no encontrado");
         }
 
         @Test

@@ -2,19 +2,20 @@ package com.lectuaria.backend.controller.books;
 
 import com.lectuaria.backend.dto.book.BookPublishRequestDTO;
 import com.lectuaria.backend.dto.book.BookPublishResponseDTO;
-import com.lectuaria.backend.exception.UnauthorizedException;
-import com.lectuaria.backend.model.auth.User;
-import com.lectuaria.backend.security.JwtService;
+import com.lectuaria.backend.security.AuthenticatedUserResolver;
 import com.lectuaria.backend.service.book.IBookPublishService;
 import com.lectuaria.backend.service.storage.S3StorageService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.hateoas.EntityModel;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-import com.lectuaria.backend.repository.auth.UserRepository;
 import org.springframework.lang.NonNull;
+import org.springframework.web.bind.annotation.*;
+
+import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
+import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.methodOn;
 
 
 @RestController
@@ -23,35 +24,33 @@ public class BookPublishController {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(BookPublishController.class);
     private final IBookPublishService bookPublishService;
-    private final UserRepository userRepository;
-    private final JwtService jwtService;
     private final S3StorageService s3StorageService;
+    private final AuthenticatedUserResolver userResolver;
 
-    public BookPublishController(IBookPublishService bookPublishService, JwtService jwtService,
-            UserRepository userRepository, S3StorageService s3StorageService) {
+    public BookPublishController(IBookPublishService bookPublishService,
+                                  S3StorageService s3StorageService,
+                                  AuthenticatedUserResolver userResolver) {
         this.bookPublishService = bookPublishService;
-        this.userRepository = userRepository;
-        this.jwtService = jwtService;
         this.s3StorageService = s3StorageService;
+        this.userResolver = userResolver;
     }
 
     @PostMapping("/publish")
-    public ResponseEntity<BookPublishResponseDTO> publishBook(
+    public ResponseEntity<EntityModel<BookPublishResponseDTO>> publishBook(
             @Valid @RequestBody BookPublishRequestDTO request,
             HttpServletRequest httpRequest) {
-
-        Long librarianUserId = extractUserIdFromToken(httpRequest);
-
-        BookPublishResponseDTO response = bookPublishService.publishBook(request, librarianUserId);
-        return ResponseEntity.ok(response);
+        Long librarianUserId = userResolver.requireCurrentUser(httpRequest).getId();
+        BookPublishResponseDTO body = bookPublishService.publishBook(request, librarianUserId);
+        EntityModel<BookPublishResponseDTO> model = EntityModel.of(body);
+        model.add(linkTo(methodOn(BookController.class).getBookById(body.getBookId())).withRel("book"));
+        return ResponseEntity.ok(model);
     }
 
     @PostMapping("/publish-with-cover")
-    public ResponseEntity<BookPublishResponseDTO> publishBookWithCover(
+    public ResponseEntity<EntityModel<BookPublishResponseDTO>> publishBookWithCover(
             @RequestBody BookPublishRequestDTO request,
             HttpServletRequest httpRequest) throws Exception {
-
-        Long librarianUserId = extractUserIdFromToken(httpRequest);
+        Long librarianUserId = userResolver.requireCurrentUser(httpRequest).getId();
 
         // If cover image provided as base64, upload to S3 and set as coverUrl
         if (request.getCoverUrl() != null && request.getCoverUrl().startsWith("data:")) {
@@ -65,42 +64,28 @@ public class BookPublishController {
             LOGGER.info("Cover image uploaded for ISBN {}: {}", isbn, coverUrl);
         }
 
-        BookPublishResponseDTO response = bookPublishService.publishBook(request, librarianUserId);
-        return ResponseEntity.ok(response);
+        BookPublishResponseDTO body = bookPublishService.publishBook(request, librarianUserId);
+        EntityModel<BookPublishResponseDTO> model = EntityModel.of(body);
+        model.add(linkTo(methodOn(BookController.class).getBookById(body.getBookId())).withRel("book"));
+        return ResponseEntity.ok(model);
     }
 
     @GetMapping("/prefill/{isbn}")
-    public ResponseEntity<BookPublishRequestDTO> prefillFromOpenLibrary(@PathVariable @NonNull Long isbn,
-            HttpServletRequest httpRequest) {
-        Long librarianUserId = extractUserIdFromToken(httpRequest);
-
-        BookPublishRequestDTO request = bookPublishService.prefillFromOpenLibrary(isbn, librarianUserId);
+    public ResponseEntity<EntityModel<BookPublishRequestDTO>> prefillFromOpenLibrary(@PathVariable @NonNull Long isbn,
+                                                                                     HttpServletRequest httpRequest) {
+        Long librarianUserId = userResolver.requireCurrentUser(httpRequest).getId();
+        BookPublishRequestDTO body = bookPublishService.prefillFromOpenLibrary(isbn, librarianUserId);
 
         LOGGER.info("Controller - Response data: Title={}, Authors={}, Description={}, CoverUrl={}, Publishers={}",
-                request.getTitle(),
-                request.getAuthors(),
-                request.getDescription(),
-                request.getCoverUrl(),
-                request.getPublishers());
+                body.getTitle(),
+                body.getAuthors(),
+                body.getDescription(),
+                body.getCoverUrl(),
+                body.getPublishers());
 
-        return ResponseEntity.ok(request);
-    }
-
-    @SuppressWarnings("null")
-    private @NonNull Long extractUserIdFromToken(HttpServletRequest request) {
-        String authHeader = request.getHeader("Authorization");
-
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            throw new UnauthorizedException("Token requerido");
-        }
-
-        String token = authHeader.substring(7);
-
-        String email = jwtService.extractEmail(token);
-
-        // Buscar el usuario por email y retornar su ID
-        return userRepository.findByEmail(email)
-                .map(User::getId)
-                .orElseThrow(() -> new UnauthorizedException("Usuario no encontrado"));
+        EntityModel<BookPublishRequestDTO> model = EntityModel.of(body);
+        model.add(linkTo(methodOn(BookPublishController.class).prefillFromOpenLibrary(isbn, null))
+                .withSelfRel());
+        return ResponseEntity.ok(model);
     }
 }

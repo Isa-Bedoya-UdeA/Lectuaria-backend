@@ -111,9 +111,9 @@ class FriendshipControllerTest {
             mockMvc.perform(get("/api/friendships/search")
                             .param("query", "alice"))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.length()").value(1))
-                    .andExpect(jsonPath("$[0].fullName").value("Alice"))
-                    .andExpect(jsonPath("$[0].friendshipStatus").value("none"));
+                    .andExpect(jsonPath("$._embedded.userSearchResponseDTOList.length()").value(1))
+                    .andExpect(jsonPath("$._embedded.userSearchResponseDTOList[0].fullName").value("Alice"))
+                    .andExpect(jsonPath("$._embedded.userSearchResponseDTOList[0].friendshipStatus").value("none"));
         }
 
         @Test
@@ -129,8 +129,8 @@ class FriendshipControllerTest {
                             .header("Authorization", authHeader("any-token"))
                             .param("query", "alice"))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.length()").value(1))
-                    .andExpect(jsonPath("$[0].friendshipStatus").value("friends"));
+                    .andExpect(jsonPath("$._embedded.userSearchResponseDTOList.length()").value(1))
+                    .andExpect(jsonPath("$._embedded.userSearchResponseDTOList[0].friendshipStatus").value("friends"));
         }
 
         @Test
@@ -157,7 +157,7 @@ class FriendshipControllerTest {
                             .header("Authorization", "Bearer bad-token")
                             .param("query", "bob"))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.length()").value(1));
+                    .andExpect(jsonPath("$._embedded.userSearchResponseDTOList.length()").value(1));
         }
     }
 
@@ -178,8 +178,8 @@ class FriendshipControllerTest {
             mockMvc.perform(get("/api/friendships")
                             .header("Authorization", authHeader("any-token")))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.length()").value(1))
-                    .andExpect(jsonPath("$[0].fullName").value("Friend"));
+                    .andExpect(jsonPath("$._embedded.userSearchResponseDTOList.length()").value(1))
+                    .andExpect(jsonPath("$._embedded.userSearchResponseDTOList[0].fullName").value("Friend"));
         }
 
         @Test
@@ -216,9 +216,9 @@ class FriendshipControllerTest {
             mockMvc.perform(get("/api/friendships/requests/pending")
                             .header("Authorization", authHeader("any-token")))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.length()").value(1))
-                    .andExpect(jsonPath("$[0].friendshipStatus").value("pending_received"))
-                    .andExpect(jsonPath("$[0].friendshipRequestId").value(99));
+                    .andExpect(jsonPath("$._embedded.userSearchResponseDTOList.length()").value(1))
+                    .andExpect(jsonPath("$._embedded.userSearchResponseDTOList[0].friendshipStatus").value("pending_received"))
+                    .andExpect(jsonPath("$._embedded.userSearchResponseDTOList[0].friendshipRequestId").value(99));
         }
 
         @Test

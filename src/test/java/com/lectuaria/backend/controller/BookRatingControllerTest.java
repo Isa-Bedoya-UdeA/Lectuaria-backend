@@ -89,20 +89,22 @@ class BookRatingControllerTest {
             new BookRatingWithUserDTO(2L, 10L, new BigDecimal("4.0"), 2L, "User Two", "two@test.com", Instant.now())
         ));
 
+        // Con HATEOAS, la respuesta es CollectionModel con _embedded.bookRatingWithUserDTOList
         mockMvc.perform(get("/api/books/10/ratings"))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.length()").value(2))
-            .andExpect(jsonPath("$[0].rating").value(5.0))
-            .andExpect(jsonPath("$[0].userName").value("User One"));
+            .andExpect(jsonPath("$._embedded.bookRatingWithUserDTOList.length()").value(2))
+            .andExpect(jsonPath("$._embedded.bookRatingWithUserDTOList[0].rating").value(5.0))
+            .andExpect(jsonPath("$._embedded.bookRatingWithUserDTOList[0].userName").value("User One"));
     }
 
     @Test
     void getAllBookRatings_empty_returnsEmptyList() throws Exception {
         when(bookRatingService.getAllBookRatings(99L)).thenReturn(List.of());
 
+        // CollectionModel vacio no incluye _embedded (es null con NON_NULL)
         mockMvc.perform(get("/api/books/99/ratings"))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.length()").value(0));
+            .andExpect(jsonPath("$._embedded.bookRatingWithUserDTOList").doesNotExist());
     }
 
     @Test
@@ -114,14 +116,14 @@ class BookRatingControllerTest {
                     new BigDecimal("4.5"), "Great book!", "published", 0, false)),
                 0, 5, 1, 1, true, true, false, false));
 
+        // Con HATEOAS, getPublishedReviews ahora retorna CollectionModel (no PagedModel)
         mockMvc.perform(get("/api/books/10/reviews")
                 .queryParam("page", "0")
                 .queryParam("size", "5")
                 .queryParam("sort", "MOST_RECENT"))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.pageNumber").value(0))
-            .andExpect(jsonPath("$.pageSize").value(5))
-            .andExpect(jsonPath("$.content.length()").value(1));
+            .andExpect(jsonPath("$._embedded.bookReviewResponseDTOList.length()").value(1))
+            .andExpect(jsonPath("$._links.self.href").exists());
     }
 
     @Test

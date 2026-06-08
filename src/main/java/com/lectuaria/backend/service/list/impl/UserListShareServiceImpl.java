@@ -4,6 +4,8 @@ import com.lectuaria.backend.dto.book.BookSummaryDTO;
 import com.lectuaria.backend.dto.book.GenreDTO;
 import com.lectuaria.backend.dto.book.ShareResultDTO;
 import com.lectuaria.backend.dto.list.UserListShareDTO;
+import com.lectuaria.backend.exception.ForbiddenException;
+import com.lectuaria.backend.exception.ResourceNotFoundException;
 import com.lectuaria.backend.exception.list.AlreadySharedException;
 import com.lectuaria.backend.exception.list.PrivateListException;
 import com.lectuaria.backend.model.auth.User;
@@ -56,10 +58,10 @@ public class UserListShareServiceImpl implements IUserListShareService {
     @Transactional
     public UserListShareDTO shareListWithFriends(Long listId, List<Long> friendIds, Long ownerId) {
         UserList list = listRepository.findById(listId)
-                .orElseThrow(() -> new RuntimeException("List not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Lista no encontrada con id: " + listId));
 
         if (!list.getUser().getId().equals(ownerId)) {
-            throw new RuntimeException("You are not the owner of this list");
+            throw new ForbiddenException("No eres el dueño de esta lista");
         }
 
         if (list.getVisibility() == ListVisibility.PRIVATE) {
@@ -93,10 +95,10 @@ public class UserListShareServiceImpl implements IUserListShareService {
     @Transactional
     public ShareResultDTO shareListWithMultipleFriends(Long listId, List<Long> friendIds, String message, Long ownerId) {
         UserList list = listRepository.findById(listId)
-                .orElseThrow(() -> new RuntimeException("List not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Lista no encontrada con id: " + listId));
 
         if (!list.getUser().getId().equals(ownerId)) {
-            throw new RuntimeException("You are not the owner of this list");
+            throw new ForbiddenException("No eres el dueño de esta lista");
         }
 
         if (list.getVisibility() == ListVisibility.PRIVATE) {
@@ -113,7 +115,7 @@ public class UserListShareServiceImpl implements IUserListShareService {
             if (friendId.equals(ownerId)) continue;
 
             User receiver = userRepository.findById(friendId)
-                    .orElseThrow(() -> new RuntimeException("User not found"));
+                    .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado con id: " + friendId));
 
             if (shareRepository.findByListIdAndReceiverId(listId, friendId).isPresent()) {
                 failedShares++;
@@ -168,10 +170,10 @@ public class UserListShareServiceImpl implements IUserListShareService {
     @Transactional
     public void revokeShare(Long shareId, Long ownerId) {
         UserListShare share = shareRepository.findById(shareId)
-                .orElseThrow(() -> new RuntimeException("Share not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Share no encontrado con id: " + shareId));
 
         if (!share.getOwner().getId().equals(ownerId)) {
-            throw new RuntimeException("You are not the owner of this share");
+            throw new ForbiddenException("No eres el dueño de este share");
         }
 
         share.setActive(false);
@@ -188,7 +190,7 @@ public class UserListShareServiceImpl implements IUserListShareService {
     @Override
     public UserListShareDTO getListByPublicToken(String token) {
         UserListShare share = shareRepository.findByShareTokenAndIsActiveTrue(token)
-                .orElseThrow(() -> new RuntimeException("Invalid or expired link"));
+                .orElseThrow(() -> new com.lectuaria.backend.exception.list.InvalidShareTokenException("Token de share inválido o expirado"));
         return mapToDTO(share, true);
     }
 
