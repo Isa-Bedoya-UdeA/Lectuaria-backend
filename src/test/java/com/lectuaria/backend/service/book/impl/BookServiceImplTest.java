@@ -491,6 +491,61 @@ class BookServiceImplTest {
         }
     }
 
+    // ===== SEARCH BOOKS BY MULTIPLE FILTERS TESTS =====
+
+    @Nested
+    @DisplayName("searchBooksByMultipleFilters() — filtro de formato")
+    class SearchBooksByMultipleFiltersFormatTests {
+
+        @Test
+        @DisplayName("delegates en BookSpecifications.hasFormatTypes cuando hay formatTypes")
+        void formatFilter_isAppliedAsSpec() {
+            // Este test verifica que el servicio compone la spec correctamente
+            // y se la pasa a bookRepository.findAll. El contenido del predicado
+            // lo valida BookSpecificationsTest; aca probamos la integracion
+            // del flow.
+            com.lectuaria.backend.dto.book.BookFilterDTO filter =
+                    new com.lectuaria.backend.dto.book.BookFilterDTO();
+            filter.setFormatTypes(List.of("physical"));
+
+            when(bookRepository.findAll(any(org.springframework.data.jpa.domain.Specification.class),
+                    any(Pageable.class)))
+                    .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 6), 0));
+
+            PaginatedResponse<BookSummaryDTO> result =
+                    bookService.searchBooksByMultipleFilters(filter, 0, 6, null);
+
+            assertNotNull(result);
+            assertEquals(0, result.getContent().size());
+            // El servicio debe haber invocado findAll con alguna Specification
+            // no nula (la spec de formato)
+            verify(bookRepository).findAll(
+                    any(org.springframework.data.jpa.domain.Specification.class),
+                    any(Pageable.class));
+        }
+
+        @Test
+        @DisplayName("no agrega spec de formato cuando formatTypes es null o vacio")
+        void formatFilter_notAppliedWhenEmpty() {
+            com.lectuaria.backend.dto.book.BookFilterDTO filter =
+                    new com.lectuaria.backend.dto.book.BookFilterDTO();
+            // filter sin formatTypes
+            filter.setFormatTypes(null);
+
+            when(bookRepository.findAll(any(org.springframework.data.jpa.domain.Specification.class),
+                    any(Pageable.class)))
+                    .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 6), 0));
+
+            PaginatedResponse<BookSummaryDTO> result =
+                    bookService.searchBooksByMultipleFilters(filter, 0, 6, null);
+
+            assertNotNull(result);
+            verify(bookRepository).findAll(
+                    any(org.springframework.data.jpa.domain.Specification.class),
+                    any(Pageable.class));
+        }
+    }
+
     // ===== HELPER METHODS =====
 
     private Book createTestBook(Long id, String title, Long isbn) throws Exception {

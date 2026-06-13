@@ -847,14 +847,6 @@ public class BookServiceImpl implements IBookService {
                 ? filter.getFormatTypes()
                 : null;
 
-        // Map formatTypes list to hasPhysical/hasDigital booleans
-        Boolean hasPhysical = null;
-        Boolean hasDigital = null;
-        if (formatTypes != null) {
-            hasPhysical = formatTypes.contains("physical");
-            hasDigital = formatTypes.contains("digital");
-        }
-
         // Build Specification for multi-keyword OR logic
         Specification<Book> spec = Specification.where(null);
 
@@ -898,20 +890,15 @@ public class BookServiceImpl implements IBookService {
             });
         }
 
-        if (hasPhysical != null || hasDigital != null) {
-            final Boolean hp = hasPhysical;
-            final Boolean hd = hasDigital;
-            spec = spec.and((root, query, cb) -> {
-                Join<Book, LibraryBook> lbJoin = root.join("libraryBooks", JoinType.LEFT);
-                List<Predicate> conditions = new ArrayList<>();
-                if (hp != null && hp) {
-                    conditions.add(cb.gt(lbJoin.get("physicalCopies"), 0));
-                }
-                if (hd != null && hd) {
-                    conditions.add(cb.isTrue(lbJoin.get("digitalAvailable")));
-                }
-                return conditions.stream().reduce(cb.conjunction(), cb::or);
-            });
+        if (formatTypes != null) {
+            // Delegamos en BookSpecifications.hasFormatTypes, que es la spec
+            // canónica para el filtro de formato. La re-implementación inline
+            // anterior con LEFT JOIN + OR tenia un edge case: libros que
+            // tenian una fila library_book con digital=true y otra con
+            // physical>0 (multiples filas) podian colarse al filtrar por
+            // un solo formato. hasFormatTypes usa INNER JOIN + OR, que es
+            // mas estricto y consistente con lo que el front espera.
+            spec = spec.and(BookSpecifications.hasFormatTypes(formatTypes));
         }
 
         if (filter.getMinYear() != null) {
