@@ -290,7 +290,7 @@ class BookServiceImplTest {
             Book mostReadBook = createTestBook(1L, "Most Read Book", 111L);
             Book topRatedBook = createTestBook(2L, "Top Rated Book", 222L);
 
-            when(listBookRepository.findMostAddedToListSince(anyString(), any(Instant.class), any(Pageable.class)))
+            when(listBookRepository.findMostReadSignals(anyList(), any(), any(Pageable.class)))
                     .thenReturn(List.of(mostReadBook));
             when(bookRepository.findQualifiedTopRated(any(), any(), any(Pageable.class)))
                     .thenReturn(new PageImpl<>(List.of(topRatedBook)));
@@ -308,7 +308,7 @@ class BookServiceImplTest {
         @Test
         @DisplayName("returns empty sections when no data")
         void getFeaturedSections_returnsEmptySections() {
-            when(listBookRepository.findMostAddedToListSince(anyString(), any(Instant.class), any(Pageable.class)))
+            when(listBookRepository.findMostReadSignals(anyList(), any(), any(Pageable.class)))
                     .thenReturn(List.of());
             when(bookRepository.findQualifiedTopRated(any(), any(), any(Pageable.class)))
                     .thenReturn(new PageImpl<>(List.of()));

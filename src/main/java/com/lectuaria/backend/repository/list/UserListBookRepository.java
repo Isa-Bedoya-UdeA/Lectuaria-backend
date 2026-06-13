@@ -24,6 +24,52 @@ public interface UserListBookRepository extends JpaRepository<UserListBook, Long
     @Query("SELECT ulb.book FROM UserListBook ulb WHERE ulb.userList.name = :listName AND ulb.addedAt >= :since GROUP BY ulb.book ORDER BY COUNT(ulb) DESC, MAX(ulb.addedAt) DESC")
     List<com.lectuaria.backend.model.book.Book> findMostAddedToListSince(@Param("listName") String listName, @Param("since") Instant since, Pageable pageable);
 
+    /**
+     * Variante relajada de {@link #findMostAddedToListSince(String, Instant, Pageable)} para
+     * alimentar la seccion "Mas leidos este mes" del Home.
+     *
+     * Senales de "leido" que se cuentan en el periodo (cualquiera de las dos):
+     *  - El libro esta en una lista cuyo nombre cae en {@code listNames}
+     *    (Leidos, Favoritos, y sus variantes sin tilde y en femenino).
+     *  - El libro tiene al menos una calificacion en {@code BookRating}
+     *    creada en el periodo.
+     *
+     * {@code since} es OBLIGATORIO y no-null (el caller pasa el inicio del
+     * mes actual). Esto evita el problema conocido de PostgreSQL con
+     * {@code :param IS NULL} en subqueries (PG no puede inferir el tipo
+     * del parámetro y lanza "could not determine data type of parameter $N").
+     *
+     * El score de ranking es: (#agregadosALaLista) + (#calificaciones),
+     * ambas restringidas al periodo {@code [since, now)}.
+     */
+    @Query(value = """
+            SELECT b FROM com.lectuaria.backend.model.book.Book b
+            WHERE b.id IN (
+                SELECT ulb.book.id FROM UserListBook ulb
+                WHERE ulb.userList.name IN :listNames
+                  AND ulb.addedAt >= :since
+                GROUP BY ulb.book.id
+            )
+            OR b.id IN (
+                SELECT br.book.id FROM com.lectuaria.backend.model.book.BookRating br
+                WHERE br.createdAt >= :since
+                GROUP BY br.book.id
+            )
+            ORDER BY (
+                (SELECT COUNT(ulb2) FROM UserListBook ulb2
+                 WHERE ulb2.book = b AND ulb2.userList.name IN :listNames
+                   AND ulb2.addedAt >= :since)
+                +
+                (SELECT COUNT(br2) FROM com.lectuaria.backend.model.book.BookRating br2
+                 WHERE br2.book = b
+                   AND br2.createdAt >= :since)
+            ) DESC
+            """)
+    List<com.lectuaria.backend.model.book.Book> findMostReadSignals(
+            @Param("listNames") List<String> listNames,
+            @Param("since") Instant since,
+            Pageable pageable);
+
     Optional<UserListBook> findByUserListIdAndBookId(Long listId, Long bookId);
 
     /** Find which of the user's lists contains this book */

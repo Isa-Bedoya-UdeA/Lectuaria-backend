@@ -371,12 +371,18 @@ public class BookServiceImpl implements IBookService {
 
     public FeaturedSectionsDTO getFeaturedSections() {
         Instant monthStart = LocalDate.now(ZoneOffset.UTC).withDayOfMonth(1).atStartOfDay().toInstant(ZoneOffset.UTC);
-        Instant weekStart = LocalDate.now(ZoneOffset.UTC)
-                .with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
-                .atStartOfDay().toInstant(ZoneOffset.UTC);
 
+        // Senales de "leido" que se aceptan para la seccion "Mas leidos":
+        // el libro en una lista llamada Leidos/Leidos o en Favoritos/Favoritas.
+        // Esto esta alineado con el resto del sistema, que ya considera
+        // ambas listas como equivalentes a "leido" (ver UserListBookRepository).
+        List<String> readListNames = List.of("Leídos", "Leidos", "Favoritos", "Favoritas");
+
+        // Ventana: mes actual (UTC). Coherente con el nombre de la seccion
+        // "Mas leidos ESTE MES" y con el resto del sistema.
+        // Score = #agregadosALaLista + #calificaciones en el periodo.
         List<BookSummaryDTO> mostRead = listToSummary(
-                listBookRepository.findMostAddedToListSince("Leídos", monthStart, PageRequest.of(0, 10)));
+                listBookRepository.findMostReadSignals(readListNames, monthStart, PageRequest.of(0, 10)));
 
         List<BookSummaryDTO> topRated = listToSummary(
                 bookRepository.findQualifiedTopRated(null, null, PageRequest.of(0, 10)).getContent());
