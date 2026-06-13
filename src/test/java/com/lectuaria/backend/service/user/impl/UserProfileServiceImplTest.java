@@ -359,19 +359,64 @@ when(userRepository.findByUsernameIgnoreCase("perfil_user")).thenReturn(Optional
     class GetFriendActivityTests {
 
         @Test
-        @DisplayName("returns empty list when currentUser is null")
+        @DisplayName("returns empty list when currentUser is null and default privacy is FRIENDS")
         void returnsEmptyWhenNoUser() throws Exception {
+            // Default de UserPrivacySettings: todos los Visibility en FRIENDS.
+            // Un visitante anonimo no es amigo, asi que FRIENDS => no ve nada.
             when(userRepository.findByUsernameIgnoreCase("perfil_user")).thenReturn(Optional.of(profileUser));
+            when(privacyRepository.findByUserId(PROFILE_ID)).thenReturn(Optional.empty());
+            when(userRepository.findById(PROFILE_ID)).thenReturn(Optional.of(profileUser));
+            // getOrCreatePrivacySettings llama a save cuando no existe; mockeamos
+            // para que devuelva la misma instancia creada en el lambda.
+            when(privacyRepository.save(any(UserPrivacySettings.class)))
+                    .thenAnswer(inv -> inv.getArgument(0));
 
             List<FriendActivityDTO> result = service.getFriendActivity("perfil_user", null);
             assertThat(result).isEmpty();
         }
 
         @Test
-        @DisplayName("returns empty list when viewing non-friend's activity")
+        @DisplayName("anonymous viewer sees activity when reviewsVisibility is PUBLIC")
+        void anonymousSeesActivityWhenPublic() throws Exception {
+            UserPrivacySettings privacy = new UserPrivacySettings(profileUser);
+            privacy.setReviewsVisibility(Visibility.PUBLIC);
+            privacy.setReadingListsActivityVisibility(Visibility.PUBLIC);
+
+            when(userRepository.findByUsernameIgnoreCase("perfil_user")).thenReturn(Optional.of(profileUser));
+            when(privacyRepository.findByUserId(PROFILE_ID)).thenReturn(Optional.of(privacy));
+
+            BookReview review = mock(BookReview.class);
+            when(review.getId()).thenReturn(100L);
+            when(review.getUser()).thenReturn(profileUser);
+            when(review.getCreatedAt()).thenReturn(Instant.now());
+            when(review.getEditedAt()).thenReturn(null);
+            when(review.getBook()).thenReturn(mock(Book.class));
+            when(review.getRating()).thenReturn(BigDecimal.valueOf(4.0));
+            when(review.getReviewText()).thenReturn("Great book");
+            when(review.getStatus()).thenReturn(ReviewStatus.published);
+            when(review.getBook().getId()).thenReturn(1L);
+            when(review.getBook().getTitle()).thenReturn("Test Book");
+            when(review.getBook().getIsbn()).thenReturn(123456L);
+            when(review.getBook().getCoverUrl()).thenReturn(null);
+            when(review.getBook().getAuthors()).thenReturn(java.util.Collections.emptyList());
+
+            when(bookReviewRepository.findRecentByUserIdsAndStatus(anyList(), eq(ReviewStatus.published), any(PageRequest.class)))
+                    .thenReturn(List.of(review));
+
+            List<FriendActivityDTO> result = service.getFriendActivity("perfil_user", null);
+
+            assertThat(result).hasSize(1);
+            assertThat(result.get(0).getActivityType()).isEqualTo("BOOK_REVIEWED");
+        }
+
+        @Test
+        @DisplayName("returns empty list when viewing non-friend's activity with default FRIENDS privacy")
         void returnsEmptyWhenNotFriends() throws Exception {
             when(userRepository.findByUsernameIgnoreCase("perfil_user")).thenReturn(Optional.of(profileUser));
-            when(friendshipRepository.findByUsers(PROFILE_ID, CURRENT_ID)).thenReturn(Optional.empty());
+            when(privacyRepository.findByUserId(PROFILE_ID)).thenReturn(Optional.empty());
+            when(userRepository.findById(PROFILE_ID)).thenReturn(Optional.of(profileUser));
+            when(privacyRepository.save(any(UserPrivacySettings.class)))
+                    .thenAnswer(inv -> inv.getArgument(0));
 
             List<FriendActivityDTO> result = service.getFriendActivity("perfil_user", currentUser);
             assertThat(result).isEmpty();

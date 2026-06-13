@@ -273,23 +273,19 @@ public class UserProfileServiceImpl implements IUserProfileService {
         User profileUser = userRepository.findByUsernameIgnoreCase(usernameSlug)
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
 
-        if (currentUser == null) return new ArrayList<>();
-
-        if (!currentUser.getId().equals(profileUser.getId())) {
-            boolean areFriends = friendshipRepository.findByUsers(profileUser.getId(), currentUser.getId()).isPresent();
-            if (!areFriends) return new ArrayList<>();
-        }
-
         UserPrivacySettings privacy = getOrCreatePrivacySettings(profileUser.getId());
-        boolean isSelf = currentUser.getId().equals(profileUser.getId());
-        boolean friendOfFriend = isFriend(currentUser.getId(), profileUser.getId());
+        boolean isSelf = currentUser != null && currentUser.getId().equals(profileUser.getId());
+        // Visitante anonimo: no es amigo de nadie, no es self. Solo ve lo publico.
+        boolean friendOfFriend = currentUser != null && isFriend(currentUser.getId(), profileUser.getId());
 
         List<FriendActivityDTO> activities = new ArrayList<>();
         PageRequest pageRequest = PageRequest.of(0, 10);
 
-        boolean showReviews = isSelf || privacy.getReviewsVisibility() == Visibility.PUBLIC
+        boolean showReviews = isSelf
+                || privacy.getReviewsVisibility() == Visibility.PUBLIC
                 || (privacy.getReviewsVisibility() == Visibility.FRIENDS && friendOfFriend);
-        boolean showActivity = isSelf || privacy.getReadingListsActivityVisibility() == Visibility.PUBLIC
+        boolean showActivity = isSelf
+                || privacy.getReadingListsActivityVisibility() == Visibility.PUBLIC
                 || (privacy.getReadingListsActivityVisibility() == Visibility.FRIENDS && friendOfFriend);
 
         if (showReviews) {
@@ -318,13 +314,14 @@ public class UserProfileServiceImpl implements IUserProfileService {
 
         if (showActivity) {
             List<UserListBook> listBooks = userListBookRepository.findRecentByUserIds(List.of(profileUser.getId()), pageRequest);
+            final Long currentUserId = currentUser != null ? currentUser.getId() : null;
             listBooks = listBooks.stream()
                     .filter(listBook -> {
-                        if (listBook.getUserList().getVisibility() == ListVisibility.PUBLIC ||
-                            listBook.getUserList().getUser().getId().equals(currentUser.getId())) return true;
-                        if (listBook.getUserList().getVisibility() == ListVisibility.LISTED) {
+                        if (listBook.getUserList().getVisibility() == ListVisibility.PUBLIC) return true;
+                        if (currentUserId != null && listBook.getUserList().getUser().getId().equals(currentUserId)) return true;
+                        if (listBook.getUserList().getVisibility() == ListVisibility.LISTED && currentUserId != null) {
                             return userListShareRepository.findByListIdAndReceiverIdAndIsActiveTrue(
-                                    listBook.getUserList().getId(), currentUser.getId()).isPresent();
+                                    listBook.getUserList().getId(), currentUserId).isPresent();
                         }
                         return false;
                     })
@@ -332,9 +329,9 @@ public class UserProfileServiceImpl implements IUserProfileService {
 
             for (UserListBook listBook : listBooks) {
                 String publicToken = null;
-                if (listBook.getUserList().getVisibility() == ListVisibility.LISTED) {
+                if (listBook.getUserList().getVisibility() == ListVisibility.LISTED && currentUserId != null) {
                     UserListShare share = userListShareRepository.findByListIdAndReceiverIdAndIsActiveTrue(
-                            listBook.getUserList().getId(), currentUser.getId()).orElse(null);
+                            listBook.getUserList().getId(), currentUserId).orElse(null);
                     if (share != null && share.getShareToken() != null) publicToken = share.getShareToken();
                 }
 
