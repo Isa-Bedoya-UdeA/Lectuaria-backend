@@ -1,7 +1,7 @@
 package com.lectuaria.backend.util;
 
-import java.io.BufferedInputStream;
 import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -16,83 +16,82 @@ import java.nio.charset.StandardCharsets;
  * distintos encodings. Este helper:</p>
  * <ol>
  *   <li>Detecta UTF-8 con BOM (\uFEFF al inicio).</li>
- *   <li>Intenta decodificar como UTF-8; si los bytes no son UTF-8 válidos,
- *       cae a Windows-1252 (default histórico de Windows, usado por Bloc
- *       de Notas).</li>
- *   <li>Como último recurso usa Latin-1 (ISO-8859-1), que acepta cualquier
- *       byte y evita errores de I/O.</li>
+ *   <li>Verifica si los bytes son UTF-8 bien-formado (sin secuencias
+ *       truncadas, overlongs, ni surrogates).</li>
+ *   <li>Cae a Windows-1252 (default histórico de Windows, usado por Bloc
+ *       de Notas) cuando los bytes no son UTF-8 válido.</li>
  * </ol>
  *
- * <p>Inspirado en el patrón de {@code java.nio.charset.CharsetDecoder}
- * con {@code CodingErrorAction.REPORT} para distinguir UTF-8 inválido de
- * UTF-8 válido. La heurística final es: si el archivo decodifica como
- * UTF-8 sin replacements, es UTF-8; si no, Windows-1252 (que cubre los
- * caracteres del español sin replacements).</p>
+ * <p><b>Implementación:</b> lee el stream completo a un buffer en memoria
+ * y luego construye un {@link ByteArrayInputStream} sobre esos bytes. Esto
+ * evita depender de {@code mark/reset} del stream original, que no todos
+ * los {@link InputStream} retornados por frameworks (Spring Multipart,
+ * servlets) soportan correctamente. El costo es cargar el CSV en RAM,
+ * aceptable para los volúmenes esperados (bibliotecas con cientos de
+ * libros a la vez, raramente >1 MB).</p>
  */
 public final class EncodingHelper {
+
+    private static final int DEFAULT_BUFFER_SIZE = 8192;
 
     private EncodingHelper() {
         // utility class
     }
 
     /**
-     * Tamaño del buffer usado para detectar el encoding. 8 KB es más que
-     * suficiente para validar UTF-8 sobre el header de un CSV.
-     */
-    private static final int PROBE_BUFFER_SIZE = 8192;
-
-    /**
      * Construye un {@link BufferedReader} para un CSV detectando
-     * automáticamente el encoding. Equivalente a:
-     * <pre>
-     *   new BufferedReader(new InputStreamReader(stream, detectedCharset))
-     * </pre>
+     * automáticamente el encoding. El stream de entrada se consume por
+     * completo.
      *
-     * @param stream stream del archivo CSV. Se consume por completo.
+     * @param stream stream del archivo CSV.
      * @return reader con el charset detectado.
      */
     public static BufferedReader newCsvReader(InputStream stream) throws IOException {
-        Charset charset = detectCharset(stream);
-        return new BufferedReader(new InputStreamReader(stream, charset));
+        byte[] bytes = readAllBytes(stream);
+        Charset charset = detectCharset(bytes);
+        // Strip UTF-8 BOM (\uFEFF) if present; otherwise it would appear as
+        // a leading character on the first line read by the consumer.
+        if (charset == StandardCharsets.UTF_8 && bytes.length >= 3
+                && (bytes[0] & 0xFF) == 0xEF
+                && (bytes[1] & 0xFF) == 0xBB
+                && (bytes[2] & 0xFF) == 0xBF) {
+            return new BufferedReader(new InputStreamReader(
+                    new ByteArrayInputStream(bytes, 3, bytes.length - 3), charset));
+        }
+        return new BufferedReader(new InputStreamReader(new ByteArrayInputStream(bytes), charset));
     }
 
     /**
-     * Detecta el charset del stream según el contenido:
+     * Lee el stream completo a un byte array.
+     */
+    private static byte[] readAllBytes(InputStream stream) throws IOException {
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        byte[] buffer = new byte[DEFAULT_BUFFER_SIZE];
+        int read;
+        while ((read = stream.read(buffer)) != -1) {
+            out.write(buffer, 0, read);
+        }
+        return out.toByteArray();
+    }
+
+    /**
+     * Detecta el charset del byte array según el contenido:
      * <ol>
-     *   <li>Si el stream empieza con el BOM UTF-8 (EF BB BF) → UTF-8.</li>
-     *   <li>Si los primeros bytes son UTF-8 válidos (sin bytes
-     *       malformed) → UTF-8.</li>
+     *   <li>Si empieza con el BOM UTF-8 (EF BB BF) → UTF-8.</li>
+     *   <li>Si los bytes son UTF-8 válidos → UTF-8.</li>
      *   <li>En otro caso → Windows-1252, que cubre todos los caracteres
      *       del español (tildes, ñ, ü) sin replacements.</li>
      * </ol>
-     *
-     * <p>El stream se consume parcialmente; se devuelve al inicio mediante
-     * {@link InputStream#mark(int)} / {@link InputStream#reset()} para que
-     * el caller pueda releerlo.</p>
      */
-    public static Charset detectCharset(InputStream stream) throws IOException {
-        if (!stream.markSupported()) {
-            stream = new BufferedInputStream(stream);
-        }
-        stream.mark(PROBE_BUFFER_SIZE);
-
-        byte[] buffer = new byte[PROBE_BUFFER_SIZE];
-        int read = 0;
-        int totalRead = 0;
-        while (totalRead < buffer.length && (read = stream.read(buffer, totalRead, buffer.length - totalRead)) != -1) {
-            totalRead += read;
-        }
-
-        stream.reset();
-
-        if (totalRead >= 3
-                && (buffer[0] & 0xFF) == 0xEF
-                && (buffer[1] & 0xFF) == 0xBB
-                && (buffer[2] & 0xFF) == 0xBF) {
+    public static Charset detectCharset(byte[] bytes) {
+        if (bytes.length >= 3
+                && (bytes[0] & 0xFF) == 0xEF
+                && (bytes[1] & 0xFF) == 0xBB
+                && (bytes[2] & 0xFF) == 0xBF) {
             return StandardCharsets.UTF_8;
         }
 
-        if (isLikelyUtf8(buffer, totalRead)) {
+        if (isLikelyUtf8(bytes)) {
             return StandardCharsets.UTF_8;
         }
 
@@ -100,12 +99,12 @@ public final class EncodingHelper {
     }
 
     /**
-     * Verifica si los primeros {@code length} bytes del buffer son UTF-8
-     * bien-formado, sin bytes de continuation sueltos ni secuencias
-     * truncadas.
+     * Verifica si los bytes son UTF-8 bien-formado, sin bytes de
+     * continuation sueltos, overlongs, ni surrogates.
      */
-    private static boolean isLikelyUtf8(byte[] buffer, int length) {
+    private static boolean isLikelyUtf8(byte[] buffer) {
         int i = 0;
+        int length = buffer.length;
         while (i < length) {
             int b = buffer[i] & 0xFF;
             if (b < 0x80) {
