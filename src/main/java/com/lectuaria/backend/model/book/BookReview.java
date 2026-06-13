@@ -34,7 +34,7 @@ public class BookReview {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
-    private ReviewStatus status = ReviewStatus.draft;
+    private ReviewStatus status = ReviewStatus.DRAFT;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

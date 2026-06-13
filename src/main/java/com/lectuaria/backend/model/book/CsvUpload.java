@@ -34,6 +34,8 @@ public class CsvUpload {
     @Column(name = "file_name")
     private String fileName;
 
+    // Constructor sin argumentos requerido por JPA (Jakarta Persistence)
+    // para instanciar la entidad via reflection al cargar desde la BD.
     public CsvUpload() {}
 
     public Long getId() {

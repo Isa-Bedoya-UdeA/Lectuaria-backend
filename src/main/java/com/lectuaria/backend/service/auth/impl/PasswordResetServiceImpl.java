@@ -21,6 +21,12 @@ import java.util.Base64;
 @Service
 public class PasswordResetServiceImpl implements IPasswordResetService {
 
+    // Reutilizable: SecureRandom es thread-safe y costoso de inicializar.
+    // Lo dejamos como campo estatico para que todas las instancias lo
+    // compartan en vez de crear uno nuevo en cada llamada a generateSecureToken.
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+
+
     private final UserRepository userRepository;
     private final PasswordResetTokenRepository tokenRepository;
     private final PasswordEncoder passwordEncoder;
@@ -98,9 +104,8 @@ public class PasswordResetServiceImpl implements IPasswordResetService {
     }
 
     private String generateSecureToken() {
-        SecureRandom random = new SecureRandom();
         byte[] bytes = new byte[32];
-        random.nextBytes(bytes);
+        SECURE_RANDOM.nextBytes(bytes);
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 }

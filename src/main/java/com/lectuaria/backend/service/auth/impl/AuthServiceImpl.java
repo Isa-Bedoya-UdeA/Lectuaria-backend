@@ -136,7 +136,9 @@ public class AuthServiceImpl implements IAuthService {
                 user.getRole().name());
     }
 
-    @Transactional
+    // Sin @Transactional: se invoca desde register() que ya es
+    // transaccional, asi que participa en la transaccion existente.
+    // Ademas, S6809 prohibe llamar @Transactional via this.
     private void createLibraryAndLibrarian(User user, LibraryRequestDTO libRequest) {
         // Verificar que el email de contacto de la biblioteca no esté en uso
         if (libraryRepository.existsByContactEmail(libRequest.getContactEmail())) {
@@ -365,9 +367,25 @@ public class AuthServiceImpl implements IAuthService {
     }
 
     @SuppressWarnings("null")
-    @Transactional
+    // Sin @Transactional: se invoca desde updateProfile() que ya es
+    // transaccional, asi que participa en la transaccion existente.
+    // Ademas, S6809 prohibe llamar @Transactional via this.
+    //
+    // Refactorizado en helpers para bajar la complejidad cognitiva
+    // (regla S3776 de SonarCloud). El metodo original tenia 5
+    // ramificaciones anidadas; ahora cada helper tiene <= 3.
     private ProfileResponseDTO updateLibrarianProfile(User user, ProfileUpdateRequestDTO request) {
-        // ===== Actualizar campos del usuario (comunes) =====
+        applyUserUpdates(user, request);
+        Librarian librarian = librarianRepository.findByUser(user)
+                .orElseThrow(() -> new ValidationException(List.of("Perfil de bibliotecario no encontrado.")));
+        applyLibraryUpdates(librarian.getLibrary(), request);
+        userRepository.save(user);
+        libraryRepository.save(librarian.getLibrary());
+        return getLibrarianProfile(user);
+    }
+
+    /** Aplica los campos opcionales del usuario (username, photo, bio). */
+    private void applyUserUpdates(User user, ProfileUpdateRequestDTO request) {
         if (request.getUsername() != null && !request.getUsername().isBlank()) {
             if (userRepository.existsByUsernameIgnoreCaseAndEmailNot(request.getUsername(), user.getEmail())) {
                 throw new ConflictException("El nombre de usuario ya está en uso.",
@@ -375,20 +393,21 @@ public class AuthServiceImpl implements IAuthService {
             }
             user.setUsername(request.getUsername());
         }
-
         if (request.getPhotoUrl() != null) {
             user.setPhotoUrl(request.getPhotoUrl());
         }
         if (request.getBiography() != null) {
             user.setBiography(request.getBiography());
         }
+    }
 
-        // ===== Actualizar datos de la biblioteca =====
-        Librarian librarian = librarianRepository.findByUser(user)
-                .orElseThrow(() -> new ValidationException(List.of("Perfil de bibliotecario no encontrado.")));
-
-        Library library = librarian.getLibrary();
-
+    /**
+     * Aplica los campos opcionales de la biblioteca asociados al
+     * bibliotecario (nombre, dirección, contacto, teléfono, horarios,
+     * zona). Lanza ConflictException o ValidationException si los
+     * valores propuestos no son válidos.
+     */
+    private void applyLibraryUpdates(Library library, ProfileUpdateRequestDTO request) {
         if (request.getLibraryName() != null && !request.getLibraryName().isBlank()) {
             library.setName(request.getLibraryName());
         }
@@ -396,7 +415,6 @@ public class AuthServiceImpl implements IAuthService {
             library.setAddress(request.getLibraryLocation());
         }
         if (request.getContactInfo() != null && !request.getContactInfo().isBlank()) {
-            // Validar que el nuevo email no esté en uso por otra biblioteca
             if (!request.getContactInfo().equalsIgnoreCase(library.getContactEmail())
                     && libraryRepository.existsByContactEmail(request.getContactInfo())) {
                 throw new ConflictException("El correo de contacto ya está registrado.",
@@ -411,18 +429,11 @@ public class AuthServiceImpl implements IAuthService {
             library.setOpeningHours(request.getOfficeHours());
         }
         if (request.getIdZone() != null) {
-            // Validar que la zona existe
             if (!livingZoneRepository.existsById(request.getIdZone())) {
                 throw new ValidationException(List.of("La zona/comuna seleccionada no existe."));
             }
             library.setIdZone(request.getIdZone());
         }
-
-        // Guardar cambios en ambas entidades
-        userRepository.save(user);
-        libraryRepository.save(library);
-
-        return getLibrarianProfile(user);
     }
 
     @Override

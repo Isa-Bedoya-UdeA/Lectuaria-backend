@@ -221,7 +221,7 @@ public class HomeServiceImpl implements IHomeService {
                 .collect(Collectors.toList());
 
         List<FriendActivityDTO> reviewActivities = reviewRepository
-                .findRecentByUserIdsAndStatus(friendIds, ReviewStatus.published, PageRequest.of(0, size))
+                .findRecentByUserIdsAndStatus(friendIds, ReviewStatus.PUBLISHED, PageRequest.of(0, size))
                 .stream()
                 .map(this::toReviewActivity)
                 .collect(Collectors.toList());

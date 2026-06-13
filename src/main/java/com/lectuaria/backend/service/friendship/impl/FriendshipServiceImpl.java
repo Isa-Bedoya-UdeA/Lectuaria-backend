@@ -91,11 +91,11 @@ public class FriendshipServiceImpl implements IFriendshipService {
             throw new IllegalArgumentException("No puedes aceptar esta solicitud");
         }
 
-        if (request.getStatus() != FriendshipRequestStatus.pending) {
+        if (request.getStatus() != FriendshipRequestStatus.PENDING) {
             throw new IllegalArgumentException("La solicitud no está pendiente");
         }
 
-        request.setStatus(FriendshipRequestStatus.accepted);
+        request.setStatus(FriendshipRequestStatus.ACCEPTED);
         requestRepository.save(request);
 
         Friendship friendship = new Friendship(request.getSender(), request.getReceiver());
@@ -118,11 +118,11 @@ public class FriendshipServiceImpl implements IFriendshipService {
             throw new IllegalArgumentException("No puedes rechazar esta solicitud");
         }
 
-        if (request.getStatus() != FriendshipRequestStatus.pending) {
+        if (request.getStatus() != FriendshipRequestStatus.PENDING) {
             throw new IllegalArgumentException("La solicitud no está pendiente");
         }
 
-        request.setStatus(FriendshipRequestStatus.rejected);
+        request.setStatus(FriendshipRequestStatus.REJECTED);
         requestRepository.save(request); // Optionally just delete it according to DDL/Logic. We update to rejected or
                                          // delete.
         // Actually, "Al rechazar, la solicitud desaparece" implies we might delete it.
@@ -139,7 +139,7 @@ public class FriendshipServiceImpl implements IFriendshipService {
             throw new IllegalArgumentException("No puedes cancelar esta solicitud");
         }
 
-        if (request.getStatus() != FriendshipRequestStatus.pending) {
+        if (request.getStatus() != FriendshipRequestStatus.PENDING) {
             throw new IllegalArgumentException("La solicitud no está pendiente");
         }
 
@@ -169,7 +169,7 @@ public class FriendshipServiceImpl implements IFriendshipService {
     @Transactional(readOnly = true)
     public List<UserSearchResponseDTO> getPendingRequests(User currentUser) {
         List<FriendshipRequest> requests = requestRepository.findByReceiverIdAndStatus(currentUser.getId(),
-                FriendshipRequestStatus.pending);
+                FriendshipRequestStatus.PENDING);
         return requests.stream().map(req -> {
             UserSearchResponseDTO dto = mapToDTO(req.getSender(), currentUser);
             dto.setFriendshipRequestId(req.getId());

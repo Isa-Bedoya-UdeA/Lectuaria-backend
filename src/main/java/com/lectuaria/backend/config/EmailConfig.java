@@ -31,6 +31,12 @@ public class EmailConfig {
     private String emailPassword;
 
     /**
+     * Timeout (en milisegundos) para las operaciones SMTP: connection,
+     * read y write. Aplicado a los tres timeouts de JavaMailSender.
+     */
+    private static final String SMTP_TIMEOUT_MS = "10000";
+
+    /**
      * Configures JavaMailSender with SMTP properties.
      */
     @Bean
@@ -46,9 +52,9 @@ public class EmailConfig {
         props.put("mail.smtp.auth", true);
         props.put("mail.smtp.starttls.enable", true);
         props.put("mail.smtp.starttls.required", true);
-        props.put("mail.smtp.connectiontimeout", "10000");
-        props.put("mail.smtp.timeout", "10000");
-        props.put("mail.smtp.writetimeout", "10000");
+        props.put("mail.smtp.connectiontimeout", SMTP_TIMEOUT_MS);
+        props.put("mail.smtp.timeout", SMTP_TIMEOUT_MS);
+        props.put("mail.smtp.writetimeout", SMTP_TIMEOUT_MS);
         props.put("mail.debug", true);
 
         return mailSender;

@@ -160,13 +160,13 @@ class HomeServiceImplTest {
             setId(review, 60L);
             setField(review, "user", friend);
             setField(review, "book", book);
-            setField(review, "status", ReviewStatus.published);
+            setField(review, "status", ReviewStatus.PUBLISHED);
             setField(review, "createdAt", Instant.now().minus(1, ChronoUnit.HOURS));
             setField(review, "publishedAt", Instant.now().plus(1, ChronoUnit.HOURS)); // newer than listBook
 
             when(friendshipRepository.findFriendsByUserId(1L)).thenReturn(List.of(friendship));
             when(listBookRepository.findRecentByUserIds(anyList(), any(Pageable.class))).thenReturn(List.of(listBook));
-            when(reviewRepository.findRecentByUserIdsAndStatus(anyList(), eq(ReviewStatus.published), any(Pageable.class)))
+            when(reviewRepository.findRecentByUserIdsAndStatus(anyList(), eq(ReviewStatus.PUBLISHED), any(Pageable.class)))
                     .thenReturn(List.of(review));
 
             List<FriendActivityDTO> result = homeService.getFriendActivity(user, 20);
@@ -203,13 +203,13 @@ class HomeServiceImplTest {
             setId(review, 60L);
             setField(review, "user", friend);
             setField(review, "book", book);
-            setField(review, "status", ReviewStatus.published);
+            setField(review, "status", ReviewStatus.PUBLISHED);
             setField(review, "createdAt", Instant.now());
 
             when(friendshipRepository.findFriendsByUserId(1L)).thenReturn(List.of(friendship));
             when(listBookRepository.findRecentByUserIds(anyList(), any(Pageable.class)))
                     .thenReturn(List.of(listBook, listBook));
-            when(reviewRepository.findRecentByUserIdsAndStatus(anyList(), eq(ReviewStatus.published), any(Pageable.class)))
+            when(reviewRepository.findRecentByUserIdsAndStatus(anyList(), eq(ReviewStatus.PUBLISHED), any(Pageable.class)))
                     .thenReturn(List.of(review, review));
 
             List<FriendActivityDTO> result = homeService.getFriendActivity(user, 1);

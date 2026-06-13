@@ -14,6 +14,18 @@ import javax.sql.DataSource;
 @RequestMapping("/api/health")
 public class HealthController {
 
+    // Claves de los campos del response JSON. Constantes para evitar
+    // duplicacion de literales (regla S1192 de SonarCloud) y para que
+    // un cambio de nombre (e.g. "status" -> "estado") sea un solo punto.
+    private static final String KEY_STATUS = "status";
+    private static final String KEY_DATABASE = "database";
+    private static final String KEY_MESSAGE = "message";
+    private static final String KEY_ERROR = "error";
+    private static final String KEY_SERVICE = "service";
+
+    private static final String STATUS_UP = "UP";
+    private static final String STATUS_DOWN = "DOWN";
+
     private final DataSource dataSource;
 
     public HealthController(DataSource dataSource) {
@@ -24,19 +36,19 @@ public class HealthController {
     public Map<String, String> checkDatabase() {
         try (Connection conn = dataSource.getConnection()) {
             return Map.of(
-                    "status", "UP",
-                    "database", "PostgreSQL",
-                    "message", "Conexión exitosa");
+                    KEY_STATUS, STATUS_UP,
+                    KEY_DATABASE, "PostgreSQL",
+                    KEY_MESSAGE, "Conexión exitosa");
         } catch (SQLException e) {
             return Map.of(
-                    "status", "DOWN",
-                    "error", e.getMessage(),
-                    "database", "PostgreSQL");
+                    KEY_STATUS, STATUS_DOWN,
+                    KEY_ERROR, e.getMessage(),
+                    KEY_DATABASE, "PostgreSQL");
         }
     }
 
     @GetMapping
     public Map<String, String> health() {
-        return Map.of("status", "UP", "service", "lectuaria-backend");
+        return Map.of(KEY_STATUS, STATUS_UP, KEY_SERVICE, "lectuaria-backend");
     }
 }

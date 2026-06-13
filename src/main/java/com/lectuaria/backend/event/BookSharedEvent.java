@@ -15,9 +15,16 @@ import org.springframework.context.ApplicationEvent;
  */
 public class BookSharedEvent extends ApplicationEvent {
 
-    private final User sender;
-    private final User receiver;
-    private final Book book;
+    // transient: ApplicationEvent implementa Serializable (lo requiere
+    // el contrato de Spring para eventos). User y Book son entidades JPA
+    // con muchas asociaciones (LAZY) y no son serializables; marcarlas
+    // transient evita el warning de SonarCloud S1948 y previene
+    // serializaciones accidentales. El listener los consume dentro del
+    // mismo thread del publishEvent (síncrono en Spring 4.2+), asi
+    // que no hay problema de referencia nula.
+    private final transient User sender;
+    private final transient User receiver;
+    private final transient Book book;
     private final String message;
 
     public BookSharedEvent(Object source, User sender, User receiver, Book book, String message) {

@@ -211,7 +211,7 @@ class FriendshipServiceImplTest {
             service.acceptFriendshipRequest(REQUEST_ID, user2);
 
             verify(requestRepository).save(request);
-            assertThat(request.getStatus()).isEqualTo(FriendshipRequestStatus.accepted);
+            assertThat(request.getStatus()).isEqualTo(FriendshipRequestStatus.ACCEPTED);
 
             verify(friendshipRepository).save(any(Friendship.class));
 
@@ -251,7 +251,7 @@ class FriendshipServiceImplTest {
         void throwsWhenRequestNotPending() {
             FriendshipRequest request = new FriendshipRequest(user1, user2);
             setId(request, REQUEST_ID);
-            request.setStatus(FriendshipRequestStatus.accepted);
+            request.setStatus(FriendshipRequestStatus.ACCEPTED);
 
             when(requestRepository.findById(REQUEST_ID)).thenReturn(Optional.of(request));
 
@@ -300,7 +300,7 @@ class FriendshipServiceImplTest {
         void throwsWhenRequestNotPending() {
             FriendshipRequest request = new FriendshipRequest(user1, user2);
             setId(request, REQUEST_ID);
-            request.setStatus(FriendshipRequestStatus.accepted);
+            request.setStatus(FriendshipRequestStatus.ACCEPTED);
 
             when(requestRepository.findById(REQUEST_ID)).thenReturn(Optional.of(request));
 
@@ -349,7 +349,7 @@ class FriendshipServiceImplTest {
         void throwsWhenRequestNotPending() {
             FriendshipRequest request = new FriendshipRequest(user1, user2);
             setId(request, REQUEST_ID);
-            request.setStatus(FriendshipRequestStatus.rejected);
+            request.setStatus(FriendshipRequestStatus.REJECTED);
 
             when(requestRepository.findById(REQUEST_ID)).thenReturn(Optional.of(request));
 
@@ -441,7 +441,7 @@ class FriendshipServiceImplTest {
             FriendshipRequest request = new FriendshipRequest(user1, user2);
             setId(request, REQUEST_ID);
 
-            when(requestRepository.findByReceiverIdAndStatus(USER2_ID, FriendshipRequestStatus.pending))
+            when(requestRepository.findByReceiverIdAndStatus(USER2_ID, FriendshipRequestStatus.PENDING))
                     .thenReturn(List.of(request));
             when(friendshipRepository.existsByUsers(USER2_ID, USER1_ID)).thenReturn(false);
             when(requestRepository.findPendingRequestBetween(USER2_ID, USER1_ID)).thenReturn(Optional.of(request));
@@ -456,7 +456,7 @@ class FriendshipServiceImplTest {
         @Test
         @DisplayName("returns empty list when no pending requests")
         void returnsEmptyList() {
-            when(requestRepository.findByReceiverIdAndStatus(USER2_ID, FriendshipRequestStatus.pending))
+            when(requestRepository.findByReceiverIdAndStatus(USER2_ID, FriendshipRequestStatus.PENDING))
                     .thenReturn(List.of());
 
             List<UserSearchResponseDTO> result = service.getPendingRequests(user2);

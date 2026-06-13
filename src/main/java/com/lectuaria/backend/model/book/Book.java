@@ -65,6 +65,8 @@ public class Book {
     private List<LibraryBook> libraryBooks;
 
     // Constructores, Getters y Setters
+    // Constructor sin argumentos requerido por JPA (Jakarta Persistence)
+    // para instanciar la entidad via reflection al cargar desde la BD.
     public Book() {
     }
 

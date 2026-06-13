@@ -14,6 +14,8 @@ public class Platform {
     @Column(name = "name_platform", unique = true, nullable = false, length = 100)
     private String name;
 
+    // Constructor sin argumentos requerido por JPA (Jakarta Persistence)
+    // para instanciar la entidad via reflection al cargar desde la BD.
     public Platform() {
     }
 

@@ -49,7 +49,7 @@ public class BookPublishController {
     @PostMapping("/publish-with-cover")
     public ResponseEntity<EntityModel<BookPublishResponseDTO>> publishBookWithCover(
             @RequestBody BookPublishRequestDTO request,
-            HttpServletRequest httpRequest) throws Exception {
+            HttpServletRequest httpRequest) throws java.io.IOException {
         Long librarianUserId = userResolver.requireCurrentUser(httpRequest).getId();
 
         // If cover image provided as base64, upload to S3 and set as coverUrl

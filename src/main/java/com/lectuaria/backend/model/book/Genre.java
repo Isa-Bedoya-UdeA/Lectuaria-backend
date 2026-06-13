@@ -21,6 +21,8 @@ public class Genre {
     @ManyToMany(mappedBy = "genres")
     private List<Book> books;
 
+    // Constructor sin argumentos requerido por JPA (Jakarta Persistence)
+    // para instanciar la entidad via reflection al cargar desde la BD.
     public Genre() {
     }
 

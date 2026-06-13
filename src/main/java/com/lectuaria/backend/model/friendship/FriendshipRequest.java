@@ -24,7 +24,7 @@ public class FriendshipRequest {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
-    private FriendshipRequestStatus status = FriendshipRequestStatus.pending;
+    private FriendshipRequestStatus status = FriendshipRequestStatus.PENDING;
 
     @CreationTimestamp
     @Column(name = "sended_date", updatable = false)
@@ -36,7 +36,7 @@ public class FriendshipRequest {
     public FriendshipRequest(User sender, User receiver) {
         this.sender = sender;
         this.receiver = receiver;
-        this.status = FriendshipRequestStatus.pending;
+        this.status = FriendshipRequestStatus.PENDING;
     }
 
     public Long getId() {

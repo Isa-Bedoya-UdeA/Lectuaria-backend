@@ -110,7 +110,7 @@ class UserProfileServiceImplTest {
             Friendship friendship = new Friendship(profileUser, currentUser);
             when(friendshipRepository.findFriendsByUserId(PROFILE_ID)).thenReturn(List.of(friendship));
 
-            when(bookReviewRepository.countByUserIdAndStatus(PROFILE_ID, ReviewStatus.published)).thenReturn(5L);
+            when(bookReviewRepository.countByUserIdAndStatus(PROFILE_ID, ReviewStatus.PUBLISHED)).thenReturn(5L);
             when(userListBookRepository.countDistinctByUserListUserId(PROFILE_ID)).thenReturn(3L);
             when(bookRatingRepository.findRatedBookIdsByUserId(PROFILE_ID)).thenReturn(List.of(100L, 200L));
             when(userListBookRepository.findReadBookIdsInListsByUserId(PROFILE_ID)).thenReturn(List.of(100L, 300L));
@@ -159,7 +159,7 @@ class UserProfileServiceImplTest {
             when(bookRatingRepository.findRatedBooksAndCreatedAtByUserId(PROFILE_ID)).thenReturn(ratedBooks);
             when(userListBookRepository.findReadBooksAndAddedAtByUserId(PROFILE_ID)).thenReturn(listBooks);
 
-            when(bookReviewRepository.countByUserIdAndStatus(PROFILE_ID, ReviewStatus.published)).thenReturn(2L);
+            when(bookReviewRepository.countByUserIdAndStatus(PROFILE_ID, ReviewStatus.PUBLISHED)).thenReturn(2L);
 
             when(genreRepository.findTopGenresByBookIds(anyList(), any(PageRequest.class))).thenReturn(List.of());
 
@@ -182,7 +182,7 @@ class UserProfileServiceImplTest {
             when(userRepository.findByUsernameIgnoreCase("perfil_user")).thenReturn(Optional.of(profileUser));
             when(bookRatingRepository.findRatedBooksAndCreatedAtByUserId(PROFILE_ID)).thenReturn(new java.util.ArrayList<>());
             when(userListBookRepository.findReadBooksAndAddedAtByUserId(PROFILE_ID)).thenReturn(new java.util.ArrayList<>());
-            when(bookReviewRepository.countByUserIdAndStatus(PROFILE_ID, ReviewStatus.published)).thenReturn(0L);
+            when(bookReviewRepository.countByUserIdAndStatus(PROFILE_ID, ReviewStatus.PUBLISHED)).thenReturn(0L);
 
             ReadingStatisticsDTO result = service.getReadingStatistics("perfil_user");
 
@@ -253,12 +253,12 @@ class UserProfileServiceImplTest {
             when(privacyRepository.findByUserId(PROFILE_ID)).thenReturn(Optional.of(privacy));
             when(friendshipRepository.findByUsers(PROFILE_ID, CURRENT_ID)).thenReturn(Optional.empty());
 
-            when(bookReviewRepository.countByUserIdAndStatus(PROFILE_ID, ReviewStatus.published)).thenReturn(5L);
+            when(bookReviewRepository.countByUserIdAndStatus(PROFILE_ID, ReviewStatus.PUBLISHED)).thenReturn(5L);
             when(userListBookRepository.countDistinctByUserListUserId(PROFILE_ID)).thenReturn(3L);
             when(bookRatingRepository.findRatedBookIdsByUserId(PROFILE_ID)).thenReturn(List.of(100L));
             when(userListBookRepository.findReadBookIdsInListsByUserId(PROFILE_ID)).thenReturn(List.of());
 
-            when(bookReviewRepository.findRecentByUserIdsAndStatus(anyList(), eq(ReviewStatus.published), any(PageRequest.class)))
+            when(bookReviewRepository.findRecentByUserIdsAndStatus(anyList(), eq(ReviewStatus.PUBLISHED), any(PageRequest.class)))
                     .thenReturn(List.of());
             when(userListRepository.findByUserIdOrderByCreatedAtAsc(PROFILE_ID)).thenReturn(List.of());
             when(friendshipRepository.findFriendsByUserId(PROFILE_ID)).thenReturn(List.of());
@@ -330,7 +330,7 @@ when(userRepository.findByUsernameIgnoreCase("perfil_user")).thenReturn(Optional
             when(privacyRepository.findByUserId(PROFILE_ID)).thenReturn(Optional.of(privacy));
             when(friendshipRepository.findByUsers(PROFILE_ID, CURRENT_ID)).thenReturn(Optional.of(friendship));
 
-            when(bookReviewRepository.countByUserIdAndStatus(PROFILE_ID, ReviewStatus.published)).thenReturn(0L);
+            when(bookReviewRepository.countByUserIdAndStatus(PROFILE_ID, ReviewStatus.PUBLISHED)).thenReturn(0L);
             when(userListBookRepository.countDistinctByUserListUserId(PROFILE_ID)).thenReturn(0L);
             when(bookRatingRepository.findRatedBookIdsByUserId(PROFILE_ID)).thenReturn(List.of());
             when(userListBookRepository.findReadBookIdsInListsByUserId(PROFILE_ID)).thenReturn(List.of());
@@ -393,14 +393,14 @@ when(userRepository.findByUsernameIgnoreCase("perfil_user")).thenReturn(Optional
             when(review.getBook()).thenReturn(mock(Book.class));
             when(review.getRating()).thenReturn(BigDecimal.valueOf(4.0));
             when(review.getReviewText()).thenReturn("Great book");
-            when(review.getStatus()).thenReturn(ReviewStatus.published);
+            when(review.getStatus()).thenReturn(ReviewStatus.PUBLISHED);
             when(review.getBook().getId()).thenReturn(1L);
             when(review.getBook().getTitle()).thenReturn("Test Book");
             when(review.getBook().getIsbn()).thenReturn(123456L);
             when(review.getBook().getCoverUrl()).thenReturn(null);
             when(review.getBook().getAuthors()).thenReturn(java.util.Collections.emptyList());
 
-            when(bookReviewRepository.findRecentByUserIdsAndStatus(anyList(), eq(ReviewStatus.published), any(PageRequest.class)))
+            when(bookReviewRepository.findRecentByUserIdsAndStatus(anyList(), eq(ReviewStatus.PUBLISHED), any(PageRequest.class)))
                     .thenReturn(List.of(review));
 
             List<FriendActivityDTO> result = service.getFriendActivity("perfil_user", null);
@@ -441,14 +441,14 @@ when(userRepository.findByUsernameIgnoreCase("perfil_user")).thenReturn(Optional
             when(review.getBook()).thenReturn(mock(Book.class));
             when(review.getRating()).thenReturn(BigDecimal.valueOf(4.0));
             when(review.getReviewText()).thenReturn("Great book");
-            when(review.getStatus()).thenReturn(ReviewStatus.published);
+            when(review.getStatus()).thenReturn(ReviewStatus.PUBLISHED);
             when(review.getBook().getId()).thenReturn(1L);
             when(review.getBook().getTitle()).thenReturn("Test Book");
             when(review.getBook().getIsbn()).thenReturn(123456L);
             when(review.getBook().getCoverUrl()).thenReturn(null);
             when(review.getBook().getAuthors()).thenReturn(java.util.Collections.emptyList());
 
-            when(bookReviewRepository.findRecentByUserIdsAndStatus(anyList(), eq(ReviewStatus.published), any(PageRequest.class)))
+            when(bookReviewRepository.findRecentByUserIdsAndStatus(anyList(), eq(ReviewStatus.PUBLISHED), any(PageRequest.class)))
                     .thenReturn(List.of(review));
 
             List<FriendActivityDTO> result = service.getFriendActivity("perfil_user", profileUser);

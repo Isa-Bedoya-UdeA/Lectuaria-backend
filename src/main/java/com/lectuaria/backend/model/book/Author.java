@@ -14,6 +14,8 @@ public class Author {
     @Column(name = "author_name", unique = true, nullable = false, length = 150)
     private String name;
 
+    // Constructor sin argumentos requerido por JPA (Jakarta Persistence)
+    // para instanciar la entidad via reflection al cargar desde la BD.
     public Author() {
     }
 

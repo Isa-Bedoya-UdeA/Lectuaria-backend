@@ -10,6 +10,8 @@ public class BulkUploadResultDTO {
     private List<String> errors = new ArrayList<>();
     private List<BookPublishResponseDTO> successes = new ArrayList<>();
 
+    // Constructor sin argumentos requerido por Jackson para deserializar
+    // el response JSON del endpoint de carga masiva.
     public BulkUploadResultDTO() {}
 
     public void addError(String error) {

@@ -187,7 +187,7 @@ class BookRatingServiceImplTest {
             review.setUser(user);
             review.setRating(BigDecimal.valueOf(4.0));
             review.setReviewText("Gran libro");
-            review.setStatus(ReviewStatus.published);
+            review.setStatus(ReviewStatus.PUBLISHED);
 
             BookRatingStats stats = new BookRatingStats(BOOK_ID, BigDecimal.valueOf(4.5), 5);
 
@@ -427,7 +427,7 @@ class BookRatingServiceImplTest {
             savedReview.setUser(user);
             savedReview.setRating(BigDecimal.valueOf(4.5).setScale(1, RoundingMode.HALF_UP));
             savedReview.setReviewText("Una obra maestra de la literatura.");
-            savedReview.setStatus(ReviewStatus.published);
+            savedReview.setStatus(ReviewStatus.PUBLISHED);
             savedReview.setPublishedAt(Instant.now());
 
             BookRatingStats stats = new BookRatingStats(BOOK_ID, BigDecimal.valueOf(4.5), 1);
@@ -465,7 +465,7 @@ class BookRatingServiceImplTest {
             savedReview.setUser(user);
             savedReview.setRating(BigDecimal.valueOf(3.0).setScale(1, RoundingMode.HALF_UP));
             savedReview.setReviewText("Buena historia.");
-            savedReview.setStatus(ReviewStatus.draft);
+            savedReview.setStatus(ReviewStatus.DRAFT);
 
             BookRatingStats stats = new BookRatingStats(BOOK_ID, BigDecimal.valueOf(3.0), 1);
 
@@ -506,7 +506,7 @@ class BookRatingServiceImplTest {
             savedReview.setUser(user);
             savedReview.setRating(BigDecimal.valueOf(5.0).setScale(1, RoundingMode.HALF_UP));
             savedReview.setReviewText("Increíble.");
-            savedReview.setStatus(ReviewStatus.published);
+            savedReview.setStatus(ReviewStatus.PUBLISHED);
             savedReview.setPublishedAt(Instant.now());
 
             BookRatingStats stats = new BookRatingStats(BOOK_ID, BigDecimal.valueOf(5.0), 1);
@@ -622,7 +622,7 @@ class BookRatingServiceImplTest {
             publishedReview.setBook(book);
             publishedReview.setUser(user);
             publishedReview.setReviewText("Excelente libro");
-            publishedReview.setStatus(ReviewStatus.published);
+            publishedReview.setStatus(ReviewStatus.PUBLISHED);
             publishedReview.setPublishedAt(Instant.now());
 
             Page<BookRating> page = new PageImpl<>(List.of(rating1), PageRequest.of(0, 5), 1);
@@ -697,7 +697,7 @@ class BookRatingServiceImplTest {
             existingReview.setUser(user);
             existingReview.setRating(BigDecimal.valueOf(3.0));
             existingReview.setReviewText("Original review");
-            existingReview.setStatus(ReviewStatus.draft);
+            existingReview.setStatus(ReviewStatus.DRAFT);
 
             BookReview savedReview = new BookReview();
             setField(savedReview, "id", REVIEW_ID);
@@ -705,7 +705,7 @@ class BookRatingServiceImplTest {
             savedReview.setUser(user);
             savedReview.setRating(BigDecimal.valueOf(5.0).setScale(1, RoundingMode.HALF_UP));
             savedReview.setReviewText("Actualizado: mejoró con el tiempo.");
-            savedReview.setStatus(ReviewStatus.published);
+            savedReview.setStatus(ReviewStatus.PUBLISHED);
             savedReview.setPublishedAt(Instant.now());
             savedReview.setEditedAt(Instant.now());
 

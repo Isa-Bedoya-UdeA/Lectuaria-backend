@@ -32,6 +32,16 @@ import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.methodOn;
 @RequestMapping("/api/auth")
 public class AuthController {
 
+    // Nombre de la cookie que transporta el refresh token. Se usa en
+    // login (set), logout (clear) y refresh (read). Constante para
+    // evitar duplicacion (S1192) y centralizar el cambio de nombre.
+    private static final String REFRESH_TOKEN_COOKIE = "refreshToken";
+
+    // Duraciones de la cookie de refresh token (en segundos).
+    private static final long REFRESH_TOKEN_MAX_AGE_SECONDS_REMEMBER_ME = 60L * 60L * 24L * 30L; // 30 días
+    private static final long REFRESH_TOKEN_MAX_AGE_SECONDS_DEFAULT = 60L * 60L * 8L;                  // 8 horas
+
+
     private final IAuthService authService;
     private final JwtService jwtService;
 
@@ -58,11 +68,11 @@ public class AuthController {
         LoginResponseDTO loginResponse = authService.login(request, ipAddress);
 
         long maxAgeSeconds = request.isRememberMe()
-                ? 60 * 60 * 24 * 30
-                : 60 * 60 * 8;
+                ? REFRESH_TOKEN_MAX_AGE_SECONDS_REMEMBER_ME
+                : REFRESH_TOKEN_MAX_AGE_SECONDS_DEFAULT;
 
         @SuppressWarnings("null")
-        ResponseCookie refreshCookie = ResponseCookie.from("refreshToken", loginResponse.getRefreshToken())
+        ResponseCookie refreshCookie = ResponseCookie.from(REFRESH_TOKEN_COOKIE, loginResponse.getRefreshToken())
                 .httpOnly(true)
                 .secure(false)
                 .path("/")
@@ -86,7 +96,7 @@ public class AuthController {
             authService.logout(refreshToken);
         }
 
-        ResponseCookie deleteCookie = ResponseCookie.from("refreshToken", "")
+        ResponseCookie deleteCookie = ResponseCookie.from(REFRESH_TOKEN_COOKIE, "")
                 .httpOnly(true)
                 .secure(false)
                 .path("/")
@@ -141,11 +151,11 @@ public class AuthController {
         LoginResponseDTO newTokens = authService.refresh(refreshToken);
 
         @SuppressWarnings("null")
-        ResponseCookie refreshCookie = ResponseCookie.from("refreshToken", newTokens.getRefreshToken())
+        ResponseCookie refreshCookie = ResponseCookie.from(REFRESH_TOKEN_COOKIE, newTokens.getRefreshToken())
                 .httpOnly(true)
                 .secure(false)
                 .path("/")
-                .maxAge(60 * 60 * 24 * 30) // 30 días
+                .maxAge(REFRESH_TOKEN_MAX_AGE_SECONDS_REMEMBER_ME) // 30 días
                 .sameSite("Lax")
                 .build();
 
@@ -161,7 +171,7 @@ public class AuthController {
         }
 
         return Arrays.stream(request.getCookies())
-                .filter(cookie -> "refreshToken".equals(cookie.getName()))
+                .filter(cookie -> REFRESH_TOKEN_COOKIE.equals(cookie.getName()))
                 .map(Cookie::getValue)
                 .findFirst()
                 .orElse(null);

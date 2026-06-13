@@ -178,20 +178,20 @@ public class BookRatingServiceImpl implements IBookRatingService {
                     return nr;
                 });
 
-        boolean wasPreviouslyPublished = ReviewStatus.published.equals(review.getStatus());
+        boolean wasPreviouslyPublished = ReviewStatus.PUBLISHED.equals(review.getStatus());
 
         review.setRating(normalizeRating(request.getRating()));
         review.setReviewText(request.getReviewText().trim());
-        review.setStatus(Boolean.TRUE.equals(request.getPublish()) ? ReviewStatus.published : ReviewStatus.draft);
+        review.setStatus(Boolean.TRUE.equals(request.getPublish()) ? ReviewStatus.PUBLISHED : ReviewStatus.DRAFT);
 
-        if (ReviewStatus.published.equals(review.getStatus()) && review.getPublishedAt() == null) {
+        if (ReviewStatus.PUBLISHED.equals(review.getStatus()) && review.getPublishedAt() == null) {
             review.setPublishedAt(Instant.now());
         }
 
         BookReview saved = bookReviewRepository.save(review);
 
         // Send notification if review is being published for the first time
-        if (!wasPreviouslyPublished && ReviewStatus.published.equals(saved.getStatus())) {
+        if (!wasPreviouslyPublished && ReviewStatus.PUBLISHED.equals(saved.getStatus())) {
             sendReviewNotificationToFriends(user, book, saved.getId());
         }
 
@@ -247,7 +247,7 @@ public class BookRatingServiceImpl implements IBookRatingService {
 
             // Si la reseña existe y está publicada, mostramos el texto.
             // Si no existe, o es un borrador, mostramos solo las estrellas.
-            String text = (review != null && ReviewStatus.published.equals(review.getStatus()))
+            String text = (review != null && ReviewStatus.PUBLISHED.equals(review.getStatus()))
                     ? review.getReviewText()
                     : null;
 
@@ -260,7 +260,7 @@ public class BookRatingServiceImpl implements IBookRatingService {
                     review != null ? review.getPublishedAt() : rating.getCreatedAt(),
                     rating.getRating(),
                     text,
-                    review != null ? review.getStatus().name() : ReviewStatus.published.name(),
+                    review != null ? review.getStatus().name() : ReviewStatus.PUBLISHED.name(),
                     0, // helpfulCount opcional
                     false // ownReview se calcula en el front
             );
@@ -301,10 +301,10 @@ public class BookRatingServiceImpl implements IBookRatingService {
 
         review.setRating(normalizeRating(request.getRating()));
         review.setReviewText(request.getReviewText().trim());
-        review.setStatus(Boolean.TRUE.equals(request.getPublish()) ? ReviewStatus.published : ReviewStatus.draft);
+        review.setStatus(Boolean.TRUE.equals(request.getPublish()) ? ReviewStatus.PUBLISHED : ReviewStatus.DRAFT);
         review.setEditedAt(Instant.now());
 
-        if (ReviewStatus.published.equals(review.getStatus()) && review.getPublishedAt() == null) {
+        if (ReviewStatus.PUBLISHED.equals(review.getStatus()) && review.getPublishedAt() == null) {
             review.setPublishedAt(Instant.now());
         }
 

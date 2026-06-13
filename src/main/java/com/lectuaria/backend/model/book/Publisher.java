@@ -14,6 +14,8 @@ public class Publisher {
     @Column(name = "publisher_name", nullable = false, length = 150)
     private String name;
 
+    // Constructor sin argumentos requerido por JPA (Jakarta Persistence)
+    // para instanciar la entidad via reflection al cargar desde la BD.
     public Publisher() {
     }
 

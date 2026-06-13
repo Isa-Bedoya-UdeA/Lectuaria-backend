@@ -38,6 +38,8 @@ public class BookEditHistory {
     @Column(name = "edit_date", updatable = false)
     private Instant editDate;
 
+    // Constructor sin argumentos requerido por JPA (Jakarta Persistence)
+    // para instanciar la entidad via reflection al cargar desde la BD.
     public BookEditHistory() {}
 
     public Long getId() { return id; }

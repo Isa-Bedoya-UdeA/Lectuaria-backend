@@ -27,6 +27,8 @@ public class CsvUploadError {
     @Column(name = "created_at")
     private LocalDateTime createdAt = LocalDateTime.now();
 
+    // Constructor sin argumentos requerido por JPA (Jakarta Persistence)
+    // para instanciar la entidad via reflection al cargar desde la BD.
     public CsvUploadError() {}
 
     public Long getId() {

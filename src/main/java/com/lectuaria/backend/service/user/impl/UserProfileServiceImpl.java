@@ -154,7 +154,7 @@ public class UserProfileServiceImpl implements IUserProfileService {
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
 
         Integer friendsCount = friendshipRepository.findFriendsByUserId(user.getId()).size();
-        Integer reviewsCount = (int) bookReviewRepository.countByUserIdAndStatus(user.getId(), ReviewStatus.published);
+        Integer reviewsCount = (int) bookReviewRepository.countByUserIdAndStatus(user.getId(), ReviewStatus.PUBLISHED);
         Integer favoritesCount = (int) userListBookRepository.countDistinctByUserListUserId(user.getId());
 
         Set<Long> readBookIds = new HashSet<>();
@@ -228,7 +228,7 @@ public class UserProfileServiceImpl implements IUserProfileService {
                 })
                 .count();
 
-        Integer reviewsCount = (int) bookReviewRepository.countByUserIdAndStatus(user.getId(), ReviewStatus.published);
+        Integer reviewsCount = (int) bookReviewRepository.countByUserIdAndStatus(user.getId(), ReviewStatus.PUBLISHED);
 
         List<GenreCountDTO> topGenres = new ArrayList<>();
         if (!readBooksMap.isEmpty()) {
@@ -290,7 +290,7 @@ public class UserProfileServiceImpl implements IUserProfileService {
 
         if (showReviews) {
             List<BookReview> reviews = bookReviewRepository.findRecentByUserIdsAndStatus(
-                    List.of(profileUser.getId()), ReviewStatus.published, pageRequest);
+                    List.of(profileUser.getId()), ReviewStatus.PUBLISHED, pageRequest);
             for (BookReview review : reviews) {
                 activities.add(new FriendActivityDTO(
                         review.getId(),
@@ -387,7 +387,7 @@ public class UserProfileServiceImpl implements IUserProfileService {
 
     private List<UserProfileDTO.BookSummaryDTO> getRecentReviews(Long userId) {
         List<BookReview> reviews = bookReviewRepository.findRecentByUserIdsAndStatus(
-                List.of(userId), ReviewStatus.published, PageRequest.of(0, 5));
+                List.of(userId), ReviewStatus.PUBLISHED, PageRequest.of(0, 5));
         return reviews.stream()
                 .map(r -> new UserProfileDTO.BookSummaryDTO(
                         r.getBook().getId(),

@@ -41,7 +41,7 @@ public interface LibraryBookRepository extends JpaRepository<LibraryBook, Long>,
                         "WHERE lb.library.id = :libraryId GROUP BY g.id, g.name ORDER BY COUNT(lb) DESC, g.name ASC")
         List<Object[]> findTopGenresByLibraryId(@Param("libraryId") Long libraryId, Pageable pageable);
 
-        @Query("SELECT COUNT(r) FROM BookReview r WHERE r.status = com.lectuaria.backend.model.book.ReviewStatus.published "
+        @Query("SELECT COUNT(r) FROM BookReview r WHERE r.status = com.lectuaria.backend.model.book.ReviewStatus.PUBLISHED "
                         +
                         "AND r.book.id IN (SELECT lb.book.id FROM LibraryBook lb WHERE lb.library.id = :libraryId)")
         long countPublishedReviewsByLibraryId(@Param("libraryId") Long libraryId);
@@ -54,6 +54,6 @@ public interface LibraryBookRepository extends JpaRepository<LibraryBook, Long>,
                         "ORDER BY COALESCE(lb.book.ratingsCount, 0) DESC, lb.book.title ASC")
         List<LibraryBook> findMostPopularByLibraryId(@Param("libraryId") Long libraryId, Pageable pageable);
 
-        @Query("SELECT COUNT(r) FROM BookReview r WHERE r.book.id = :bookId AND r.status = com.lectuaria.backend.model.book.ReviewStatus.published")
+        @Query("SELECT COUNT(r) FROM BookReview r WHERE r.book.id = :bookId AND r.status = com.lectuaria.backend.model.book.ReviewStatus.PUBLISHED")
         long countPublishedReviewsByBookId(@Param("bookId") Long bookId);
 }

@@ -22,7 +22,9 @@ import java.io.IOException;
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
-    private static final Logger logger = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
+    // Renombrado de "logger" a "LOG" para no shadowear el campo "logger"
+    // heredado de GenericFilterBean (regla S2387 de SonarCloud).
+    private static final Logger LOG = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
 
     private final JwtService jwtService;
     private final UserDetailsService userDetailsService;
@@ -42,7 +44,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         final String authHeader = request.getHeader("Authorization");
 
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            logger.debug("No JWT token found in request: {}", request.getRequestURI());
+            LOG.debug("No JWT token found in request: {}", request.getRequestURI());
             filterChain.doFilter(request, response);
             return;
         }
@@ -66,17 +68,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                             new WebAuthenticationDetailsSource().buildDetails(request)
                     );
                     SecurityContextHolder.getContext().setAuthentication(authToken);
-                    logger.debug("JWT Token authenticated successfully");
+                    LOG.debug("JWT Token authenticated successfully");
                 } else {
-                    logger.warn("JWT token validation failed");
+                    LOG.warn("JWT token validation failed");
                 }
             }
         } catch (ExpiredJwtException e) {
-            logger.warn("JWT Token expired: {}", e.getMessage());
+            LOG.warn("JWT Token expired: {}", e.getMessage());
         } catch (JwtException e) {
-            logger.warn("JWT Token invalid or malformed: {}", e.getMessage());
+            LOG.warn("JWT Token invalid or malformed: {}", e.getMessage());
         } catch (Exception e) {
-            logger.error("Unexpected error during JWT authentication", e);
+            LOG.error("Unexpected error during JWT authentication", e);
         }
 
         filterChain.doFilter(request, response);
