@@ -40,6 +40,17 @@ jobs:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           JWT_EXPIRATION: ${{ secrets.JWT_EXPIRATION }}
           EMAIL_API_KEY: ${{ secrets.EMAIL_API_KEY }}
+      # Subir el reporte de JaCoCo como artifact para que el job de
+      # SonarCloud pueda consumirlo (los jobs en GitHub Actions no
+      # comparten filesystem; cada job corre en un runner fresco).
+      - name: Upload JaCoCo coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-coverage-report
+          path: target/site/jacoco/jacoco.xml
+          if-no-files-found: error
+          retention-days: 7
 
   #Sonar's Job
   sonar:
@@ -68,15 +79,31 @@ jobs:
           restore-keys: ${{ runner.os }}-sonar
       #Set up Maven cache
       - name: Cache Maven packages
-        #This action allows caching dependencies and build outputs to improve workflow execution time.
         uses: actions/cache@v3
         with:
           path: ~/.m2
           key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
           restore-keys: ${{ runner.os }}-m2
+      # Descargar el reporte de JaCoCo que subio el job de tests.
+      # Si este paso falla, abortamos antes de mandar a SonarCloud un
+      # analisis sin coverage (eso era lo que pasaba antes: Sonar mostraba
+      # 0% coverage porque el archivo target/site/jacoco/jacoco.xml no
+      # existia en este job).
+      - name: Download JaCoCo coverage report
+        uses: actions/download-artifact@v4
+        with:
+          name: jacoco-coverage-report
+          path: target/site/jacoco
       #Analyze project with SonarCloud
+      #
+      # Importante: NO usar `mvn clean verify` aca. Cada job de GitHub
+      # Actions corre en su propio runner con un target/ vacio, y el
+      # reporte de JaCoCo viene del artifact descargado arriba. Si
+      # corremos `clean`, borramos ese reporte y SonarCloud recibe 0%
+      # coverage. Con `mvn sonar:sonar` (sin clean) SonarCloud lee el
+      # archivo que acabamos de descargar.
       - name: Analyze with SonarCloud
-        run: mvn -B clean verify sonar:sonar -Dsonar.projectKey=Isa-Bedoya-UdeA_Lectuaria-backend -Dsonar.organization=isa-bedoya-udea -Dsonar.host.url=https://sonarcloud.io -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml -Dsonar.token=$SONAR_TOKEN -Dsonar.automatic=false
+        run: mvn -B sonar:sonar -Dsonar.projectKey=Isa-Bedoya-UdeA_Lectuaria-backend -Dsonar.organization=isa-bedoya-udea -Dsonar.host.url=https://sonarcloud.io -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml -Dsonar.token=$SONAR_TOKEN -Dsonar.automatic=false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
