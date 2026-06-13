@@ -4,6 +4,7 @@ import com.lectuaria.backend.dto.book.BookSummaryDTO;
 import com.lectuaria.backend.service.list.IUserListService;
 import com.lectuaria.backend.dto.book.GenreDTO;
 import com.lectuaria.backend.dto.list.CreateListRequestDTO;
+import com.lectuaria.backend.dto.list.UpdateListRequestDTO;
 import com.lectuaria.backend.dto.list.UserListDTO;
 import com.lectuaria.backend.dto.list.MoveBookResponseDTO;
 import com.lectuaria.backend.exception.ConflictException;
@@ -12,6 +13,7 @@ import com.lectuaria.backend.model.auth.User;
 import com.lectuaria.backend.model.auth.UserRole;
 import com.lectuaria.backend.model.book.Author;
 import com.lectuaria.backend.model.book.Book;
+import com.lectuaria.backend.model.book.Genre;
 import com.lectuaria.backend.model.list.ListType;
 import com.lectuaria.backend.model.list.ListVisibility;
 import com.lectuaria.backend.model.list.UserList;
@@ -27,6 +29,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -229,6 +232,56 @@ public class UserListServiceImpl implements IUserListService {
     public UserListDTO getMyFavorites(User user) {
         UserList favoriteList = getFavoriteList(user);
         return getListDetails(favoriteList.getId(), user.getId());
+    }
+
+    @Override
+    @Transactional
+    public UserListDTO updateCustomList(Long listId, UpdateListRequestDTO request, User user) {
+        if (user.getRole() == UserRole.LIBRARIAN) {
+            throw new ConflictException("Los bibliotecarios no pueden editar listas de lectura.", List.of());
+        }
+
+        UserList list = listRepository.findById(listId)
+                .orElseThrow(() -> new IllegalArgumentException("Lista no encontrada"));
+
+        if (list.getListType() != ListType.CUSTOM) {
+            throw new ConflictException("Solo se pueden editar listas personalizadas.", List.of());
+        }
+
+        if (!list.getUser().getId().equals(user.getId())) {
+            throw new UnauthorizedException("No tienes permiso para editar esta lista");
+        }
+
+        // Aplicar cambios de forma parcial: solo lo que venga en el request.
+        if (request.getName() != null && !request.getName().isBlank()) {
+            String newName = request.getName().trim();
+            if (!newName.equals(list.getName())
+                    && listRepository.findByUserIdAndName(user.getId(), newName).isPresent()) {
+                throw new ConflictException("Ya tienes una lista con este nombre.", List.of());
+            }
+            list.setName(newName);
+        }
+
+        if (request.getDescription() != null) {
+            list.setDescription(request.getDescription().isBlank() ? null : request.getDescription().trim());
+        }
+
+        if (request.getVisibility() != null && request.getVisibility() != list.getVisibility()) {
+            list.setVisibility(request.getVisibility());
+
+            // Si pasa a PRIVATE, no puede seguir compartida con nadie. Desactivamos
+            // los shares existentes (no los borramos: queda historial para auditoria).
+            if (request.getVisibility() == ListVisibility.PRIVATE) {
+                listShareRepository.deactivateAllByListId(listId);
+                list.setPublicToken(null);
+            } else if (list.getPublicToken() == null || list.getPublicToken().isBlank()) {
+                // Si pasa a LISTED/PUBLIC, garantizamos que tenga token publico.
+                list.setPublicToken(UUID.randomUUID().toString());
+            }
+        }
+
+        UserList saved = listRepository.save(list);
+        return mapToDTO(saved);
     }
 
     private UserList getFavoriteList(User user) {

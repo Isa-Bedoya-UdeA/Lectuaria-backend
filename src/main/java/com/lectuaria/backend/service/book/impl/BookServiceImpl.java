@@ -909,19 +909,19 @@ public class BookServiceImpl implements IBookService {
         }
 
         if (filter.getMinYear() != null) {
-            spec = spec.and((root, query, cb) ->
+            spec = spec.and((root, query, cb) -> cb.and(
+                    cb.isNotNull(root.get("publicationDate")),
                     cb.greaterThanOrEqualTo(
                             cb.function("date_part", Integer.class, cb.literal("year"), root.get("publicationDate")),
-                            filter.getMinYear())
-            );
+                            filter.getMinYear())));
         }
 
         if (filter.getMaxYear() != null) {
-            spec = spec.and((root, query, cb) ->
+            spec = spec.and((root, query, cb) -> cb.and(
+                    cb.isNotNull(root.get("publicationDate")),
                     cb.lessThanOrEqualTo(
                             cb.function("date_part", Integer.class, cb.literal("year"), root.get("publicationDate")),
-                            filter.getMaxYear())
-            );
+                            filter.getMaxYear())));
         }
 
         if (filter.getMinRating() != null) {

@@ -78,7 +78,9 @@ public class BookSpecifications {
             }
             Expression<Integer> yearExpression = cb.function("date_part", Integer.class,
                 cb.literal("year"), root.get("publicationDate"));
-            return cb.greaterThanOrEqualTo(yearExpression, minYear);
+            return cb.and(
+                    cb.isNotNull(root.get("publicationDate")),
+                    cb.greaterThanOrEqualTo(yearExpression, minYear));
         };
     }
 
@@ -89,7 +91,9 @@ public class BookSpecifications {
             }
             Expression<Integer> yearExpression = cb.function("date_part", Integer.class,
                 cb.literal("year"), root.get("publicationDate"));
-            return cb.lessThanOrEqualTo(yearExpression, maxYear);
+            return cb.and(
+                    cb.isNotNull(root.get("publicationDate")),
+                    cb.lessThanOrEqualTo(yearExpression, maxYear));
         };
     }
 

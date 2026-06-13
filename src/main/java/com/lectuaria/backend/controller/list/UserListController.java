@@ -3,6 +3,7 @@ package com.lectuaria.backend.controller.list;
 import com.lectuaria.backend.dto.list.CreateListRequestDTO;
 import com.lectuaria.backend.dto.list.FavoriteToggleResponseDTO;
 import com.lectuaria.backend.dto.list.MoveBookResponseDTO;
+import com.lectuaria.backend.dto.list.UpdateListRequestDTO;
 import com.lectuaria.backend.dto.list.UserListDTO;
 import com.lectuaria.backend.exception.UnauthorizedException;
 import com.lectuaria.backend.model.auth.User;
@@ -51,8 +52,22 @@ public class UserListController {
         UserListDTO list = listService.getListDetails(listId, user.getId());
         return ResponseEntity.ok(EntityModel.of(list,
                 linkTo(methodOn(UserListController.class).getListDetails(listId, request)).withSelfRel(),
+                linkTo(methodOn(UserListController.class).updateList(listId, null, request)).withRel("update"),
                 linkTo(methodOn(UserListController.class).addBook(listId, null, false, request)).withRel("add-book"),
                 linkTo(methodOn(UserListController.class).deleteList(listId, false, false, request)).withRel("delete")));
+    }
+
+    @PatchMapping("/{listId}")
+    public ResponseEntity<EntityModel<UserListDTO>> updateList(
+            @PathVariable Long listId,
+            @RequestBody UpdateListRequestDTO requestDto,
+            HttpServletRequest request) {
+        User user = userResolver.requireCurrentUser(request);
+        requireReaderRole(user);
+        UserListDTO updated = listService.updateCustomList(listId, requestDto, user);
+        return ResponseEntity.ok(EntityModel.of(updated,
+                linkTo(methodOn(UserListController.class).getListDetails(listId, request)).withSelfRel(),
+                linkTo(methodOn(UserListController.class).updateList(listId, requestDto, request)).withRel("update")));
     }
 
     @PostMapping

@@ -4,6 +4,7 @@ import com.lectuaria.backend.dto.book.BookSummaryDTO;
 import com.lectuaria.backend.dto.list.CreateListRequestDTO;
 import com.lectuaria.backend.dto.list.FavoriteToggleResponseDTO;
 import com.lectuaria.backend.dto.list.MoveBookResponseDTO;
+import com.lectuaria.backend.dto.list.UpdateListRequestDTO;
 import com.lectuaria.backend.dto.list.UserListDTO;
 import com.lectuaria.backend.model.auth.User;
 import com.lectuaria.backend.model.auth.UserRole;
@@ -272,6 +273,53 @@ class UserListControllerTest {
                             .header("Authorization", authHeader("any-token"))
                             .param("confirm", "true"))
                     .andExpect(status().isNoContent());
+        }
+    }
+
+    // ========== PATCH /api/lists/{listId} ==========
+
+    @Nested
+    class UpdateList {
+
+        @Test
+        void updateList_authenticated_returnsUpdatedList() throws Exception {
+            withUser("reader@test.com", UserRole.READER);
+
+            UserListDTO updated = makeList(1L, "Renombrada", ListType.CUSTOM, ListVisibility.PRIVATE);
+            when(listService.updateCustomList(eq(1L), any(UpdateListRequestDTO.class), eq(readerUser)))
+                    .thenReturn(updated);
+
+            String body = """
+                {
+                  "name": "Renombrada",
+                  "visibility": "PRIVATE"
+                }
+                """;
+
+            mockMvc.perform(patch("/api/lists/1")
+                            .header("Authorization", authHeader("any-token"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.name").value("Renombrada"))
+                    .andExpect(jsonPath("$.visibility").value("PRIVATE"));
+        }
+
+        @Test
+        void updateList_librarian_returns401() throws Exception {
+            withUser("lib@test.com", UserRole.LIBRARIAN);
+
+            String body = """
+                {
+                  "name": "Hack"
+                }
+                """;
+
+            mockMvc.perform(patch("/api/lists/1")
+                            .header("Authorization", authHeader("any-token"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body))
+                    .andExpect(status().isUnauthorized());
         }
     }
 

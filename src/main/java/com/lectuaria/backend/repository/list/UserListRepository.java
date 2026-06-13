@@ -26,4 +26,12 @@ public interface UserListRepository extends JpaRepository<UserList, Long> {
     /** Only public lists or lists owned by the requesting user */
     @Query("SELECT ul FROM UserList ul WHERE ul.id = :listId AND (ul.visibility = 'PUBLIC' OR ul.user.id = :requesterId)")
     Optional<UserList> findAccessible(@Param("listId") Long listId, @Param("requesterId") Long requesterId);
+
+    /**
+     * Busca la lista por su token publico (campo public_token de user_list).
+     * Es la fuente de verdad para la URL /shared/{token} que el backend
+     * expone en SecurityConfig como permitAll. Solo debe devolver listas
+     * con visibilidad PUBLICA o LISTED.
+     */
+    Optional<UserList> findByPublicToken(@Param("publicToken") String publicToken);
 }

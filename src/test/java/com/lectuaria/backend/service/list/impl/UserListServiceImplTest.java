@@ -4,6 +4,7 @@ import com.lectuaria.backend.dto.book.BookSummaryDTO;
 import com.lectuaria.backend.dto.book.GenreDTO;
 import com.lectuaria.backend.dto.list.CreateListRequestDTO;
 import com.lectuaria.backend.dto.list.MoveBookResponseDTO;
+import com.lectuaria.backend.dto.list.UpdateListRequestDTO;
 import com.lectuaria.backend.dto.list.UserListDTO;
 import com.lectuaria.backend.exception.ConflictException;
 import com.lectuaria.backend.exception.UnauthorizedException;
@@ -21,6 +22,7 @@ import com.lectuaria.backend.repository.list.UserListBookRepository;
 import com.lectuaria.backend.repository.list.UserListRepository;
 import com.lectuaria.backend.repository.list.UserListShareRepository;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -431,7 +433,7 @@ class UserListServiceImplTest {
         UserList favList = new UserList(readerUser, "Favoritos", "desc", ListType.SYSTEM, ListVisibility.LISTED);
         setId(favList, 30L);
         when(listRepository.findByUserIdAndNameAndListType(1L, "Favoritos", ListType.SYSTEM)).thenReturn(Optional.empty());
-        when(listRepository.save(any(UserList.class))).thenAnswer(inv -> {
+        when(listRepository.save(any())).thenAnswer(inv -> {
             UserList saved = inv.getArgument(0);
             setId(saved, 30L);
             return saved;
@@ -442,6 +444,102 @@ class UserListServiceImplTest {
         boolean result = userListService.toggleFavorite(50L, readerUser);
 
         assertThat(result).isTrue();
-        verify(listRepository).save(any(UserList.class));
+        verify(listRepository).save(any());
+    }
+
+    // --- updateCustomList ---
+
+    @Nested
+    class UpdateCustomListTests {
+
+        @Test
+        void updateCustomList_renamesAndChangesVisibility_returnsUpdatedDTO() {
+            customList.setName("Old name");
+            when(listRepository.findById(10L)).thenReturn(Optional.of(customList));
+            when(listRepository.findByUserIdAndName(1L, "New name")).thenReturn(Optional.empty());
+            when(listRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(listBookRepository.countByListId(10L)).thenReturn(2L);
+
+            UpdateListRequestDTO req = new UpdateListRequestDTO();
+            req.setName("New name");
+            req.setVisibility(ListVisibility.PUBLIC);
+
+            UserListDTO result = userListService.updateCustomList(10L, req, readerUser);
+
+            assertThat(result.getName()).isEqualTo("New name");
+            assertThat(result.getVisibility()).isEqualTo(ListVisibility.PUBLIC);
+            // Como paso a PUBLIC sin token previo, debe generarse uno
+            assertThat(customList.getPublicToken()).isNotNull().isNotBlank();
+        }
+
+        @Test
+        void updateCustomList_visibilityToPrivate_invalidatesSharesAndClearsToken() {
+            customList.setVisibility(ListVisibility.LISTED);
+            customList.setPublicToken("old-token");
+            when(listRepository.findById(10L)).thenReturn(Optional.of(customList));
+            when(listRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(listBookRepository.countByListId(10L)).thenReturn(0L);
+
+            UpdateListRequestDTO req = new UpdateListRequestDTO();
+            req.setVisibility(ListVisibility.PRIVATE);
+
+            UserListDTO result = userListService.updateCustomList(10L, req, readerUser);
+
+            assertThat(result.getVisibility()).isEqualTo(ListVisibility.PRIVATE);
+            verify(listShareRepository).deactivateAllByListId(10L);
+            assertThat(customList.getPublicToken()).isNull();
+        }
+
+        @Test
+        void updateCustomList_duplicateName_throws() {
+            when(listRepository.findById(10L)).thenReturn(Optional.of(customList));
+            UserList otra = new UserList(readerUser, "Otra", "d", ListType.CUSTOM, ListVisibility.PRIVATE);
+            setId(otra, 99L);
+            when(listRepository.findByUserIdAndName(1L, "Duplicada")).thenReturn(Optional.of(otra));
+
+            UpdateListRequestDTO req = new UpdateListRequestDTO();
+            req.setName("Duplicada");
+
+            assertThatThrownBy(() -> userListService.updateCustomList(10L, req, readerUser))
+                    .isInstanceOf(ConflictException.class)
+                    .hasMessage("Ya tienes una lista con este nombre.");
+        }
+
+        @Test
+        void updateCustomList_notOwner_throws() {
+            User other = new User("Otro", "otro@test.com", "h", UserRole.READER, "otro_test", null, null);
+            setId(other, 99L);
+            when(listRepository.findById(10L)).thenReturn(Optional.of(customList));
+
+            UpdateListRequestDTO req = new UpdateListRequestDTO();
+            req.setName("Hack");
+
+            assertThatThrownBy(() -> userListService.updateCustomList(10L, req, other))
+                    .isInstanceOf(UnauthorizedException.class);
+        }
+
+        @Test
+        void updateCustomList_systemList_throws() {
+            UserList systemList = new UserList(readerUser, "Por leer", "d", ListType.SYSTEM, ListVisibility.LISTED);
+            setId(systemList, 11L);
+            when(listRepository.findById(11L)).thenReturn(Optional.of(systemList));
+
+            UpdateListRequestDTO req = new UpdateListRequestDTO();
+            req.setName("Hack");
+
+            assertThatThrownBy(() -> userListService.updateCustomList(11L, req, readerUser))
+                    .isInstanceOf(ConflictException.class)
+                    .hasMessage("Solo se pueden editar listas personalizadas.");
+        }
+
+        @Test
+        void updateCustomList_librarian_throws() {
+            UpdateListRequestDTO req = new UpdateListRequestDTO();
+            req.setName("X");
+
+            assertThatThrownBy(() -> userListService.updateCustomList(10L, req, librarianUser))
+                    .isInstanceOf(ConflictException.class)
+                    .hasMessage("Los bibliotecarios no pueden editar listas de lectura.");
+        }
     }
 }
