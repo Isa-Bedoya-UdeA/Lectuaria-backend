@@ -37,6 +37,8 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
+import jakarta.persistence.criteria.Subquery;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -205,9 +207,19 @@ public class BookServiceImpl implements IBookService {
         Pageable pageable = buildPageable(sort, page, size);
 
         Specification<LibraryBook> spec = (root, query, cb) -> {
-            query.distinct(true);
+            // DISTINCT + ORDER BY de columnas de joins rompe en Postgres con
+            // "for SELECT DISTINCT, ORDER BY expressions must appear in select
+            // list". La causa: Hibernate NO agrega las columnas del ORDER BY
+            // (que vienen de un join) al SELECT DISTINCT, y Postgres exige
+            // que aparezcan.
+            //
+            // Solucion: NO hacer join con `book_author` (que multiplica filas
+            // y obliga a DISTINCT). En su lugar, la busqueda por keyword
+            // contra el nombre del autor se hace con un subquery EXISTS que
+            // no multiplica filas. Asi la query principal queda con un join
+            // 1:1 (library_book -> book), DISTINCT no es necesario, y el
+            // ORDER BY book.title funciona sin chocar con Postgres.
             Join<LibraryBook, Book> bookJoin = root.join("book", JoinType.INNER);
-            Join<Book, Author> authorJoin = bookJoin.join("authors", JoinType.LEFT);
             Predicate libraryMatch = cb.equal(root.get("library").get("id"), libraryId);
 
             if (keyword != null && !keyword.trim().isEmpty()) {
@@ -219,10 +231,35 @@ public class BookServiceImpl implements IBookService {
                     List<Predicate> wordPredicates = new java.util.ArrayList<>();
                     for (String w : words) {
                         String pattern = "%" + w + "%";
-                        wordPredicates.add(cb.or(
-                                cb.like(cb.lower(bookJoin.get("title")), pattern),
-                                cb.like(cb.lower(authorJoin.get("name")), pattern)));
+                        wordPredicates.add(cb.like(cb.lower(bookJoin.get("title")), pattern));
                     }
+                    // Subquery EXISTS: existe al menos un Book con el mismo id
+                    // que el book de este library_book, y que tenga al menos
+                    // un Author cuyo nombre contenga la palabra. La subquery
+                    // no multiplica filas de la query principal (a diferencia
+                    // de un JOIN con book_author).
+                    //
+                    // Nota: Author no tiene back-reference a Book (solo Book
+                    // expone List<Author> authors via @JoinTable), asi que la
+                    // subquery se hace sobre Book y se le hace JOIN a authors.
+                    // Filtramos por Book.id = bookJoin.id para que la
+                    // subquery solo considere el libro del row actual.
+                    Subquery<Long> authorSubquery = query.subquery(Long.class);
+                    Root<Book> bookRoot = authorSubquery.from(Book.class);
+                    Join<Book, com.lectuaria.backend.model.book.Author> authorJoin =
+                            bookRoot.join("authors", JoinType.INNER);
+                    authorSubquery.select(cb.literal(1L));
+                    List<Predicate> authorPredicates = new java.util.ArrayList<>();
+                    for (String w : words) {
+                        String pattern = "%" + w + "%";
+                        authorPredicates.add(cb.like(cb.lower(authorJoin.get("name")), pattern));
+                    }
+                    authorSubquery.where(cb.and(
+                            cb.equal(bookRoot.get("id"), bookJoin.get("id")),
+                            cb.or(authorPredicates.toArray(new Predicate[0]))
+                    ));
+                    wordPredicates.add(cb.exists(authorSubquery));
+
                     return cb.and(libraryMatch, cb.or(wordPredicates.toArray(new Predicate[0])));
                 }
             }

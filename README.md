@@ -2,9 +2,19 @@
 
 Backend REST de **Lectuaria**, plataforma web orientada al fomento de la lectura en la ciudad de Medellín. Implementa autenticación con JWT, gestión de catálogo bibliotecario, red social de lectores, sistema de notificaciones y exposición de la API como recursos HATEOAS.
 
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=Isa-Bedoya-UdeA_backend-reservas&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=Isa-Bedoya-UdeA_backend-reservas)
+[![Bugs](https://sonarcloud.io/api/project_badges/measure?project=Isa-Bedoya-UdeA_backend-reservas&metric=bugs)](https://sonarcloud.io/summary/new_code?id=Isa-Bedoya-UdeA_backend-reservas)
+[![Code Smells](https://sonarcloud.io/api/project_badges/measure?project=Isa-Bedoya-UdeA_backend-reservas&metric=code_smells)](https://sonarcloud.io/summary/new_code?id=Isa-Bedoya-UdeA_backend-reservas)
+[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=Isa-Bedoya-UdeA_backend-reservas&metric=coverage)](https://sonarcloud.io/summary/new_code?id=Isa-Bedoya-UdeA_backend-reservas)
+[![Duplicated Lines (%)](https://sonarcloud.io/api/project_badges/measure?project=Isa-Bedoya-UdeA_backend-reservas&metric=duplicated_lines_density)](https://sonarcloud.io/summary/new_code?id=Isa-Bedoya-UdeA_backend-reservas)
+[![Lines of Code](https://sonarcloud.io/api/project_badges/measure?project=Isa-Bedoya-UdeA_backend-reservas&metric=ncloc)](https://sonarcloud.io/summary/new_code?id=Isa-Bedoya-UdeA_backend-reservas)
+[![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=Isa-Bedoya-UdeA_backend-reservas&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=Isa-Bedoya-UdeA_backend-reservas)
+[![Technical Debt](https://sonarcloud.io/api/project_badges/measure?project=Isa-Bedoya-UdeA_backend-reservas&metric=sqale_index)](https://sonarcloud.io/summary/new_code?id=Isa-Bedoya-UdeA_backend-reservas)
+
 ---
 
 ## Tabla de contenidos
+
 1. [Descripción del proyecto](#descripción-del-proyecto)
 2. [Stack tecnológico](#stack-tecnológico)
 3. [Arquitectura en 5 capas](#arquitectura-en-5-capas)

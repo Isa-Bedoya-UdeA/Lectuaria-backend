@@ -235,21 +235,28 @@ public class BookController {
     }
 
     @DeleteMapping("/{id}/library")
-    public ResponseEntity<EntityModel<String>> removeBookFromLibrary(@PathVariable Long id,
-                                                                    HttpServletRequest request) {
+    public ResponseEntity<String> removeBookFromLibrary(@PathVariable Long id,
+                                                       HttpServletRequest request) {
         User user = userResolver.requireCurrentUser(request);
         bookService.removeBookFromLibrary(id, user.getId());
-        return ResponseEntity.ok(EntityModel.of("Libro eliminado de la biblioteca exitosamente.",
-                linkTo(methodOn(BookController.class).getBookById(id)).withRel("book")));
+        // Antes retornabamos EntityModel<String> con un Link HATEOAS, pero
+        // Jackson no puede serializar EntityModel cuyo content es un String
+        // escalar junto con un _links (lanza "Can not write a string, expecting
+        // field name"). Devolvemos un String plano: el body es el mensaje y
+        // los clientes que necesiten el link al recurso pueden llamar a
+        // GET /api/books/{id}. Mantiene el contrato del front (espera un
+        // body string) sin romper la serializacion.
+        return ResponseEntity.ok("Libro eliminado de la biblioteca exitosamente.");
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<EntityModel<String>> deleteBook(@PathVariable Long id,
-                                                         HttpServletRequest request) {
+    public ResponseEntity<String> deleteBook(@PathVariable Long id,
+                                              HttpServletRequest request) {
         User user = userResolver.requireCurrentUser(request);
         bookService.deleteBook(id, user.getId());
-        return ResponseEntity.ok(EntityModel.of("Libro eliminado del sistema exitosamente.",
-                linkTo(methodOn(BookController.class).getAllBooks(0, 12, null, null, null, null)).withRel("books")));
+        // Mismo fix que removeBookFromLibrary: EntityModel<String> con Links
+        // rompe la serializacion de Jackson. Devolvemos String plano.
+        return ResponseEntity.ok("Libro eliminado del sistema exitosamente.");
     }
 
     @PutMapping("/{id}")
