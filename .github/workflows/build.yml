@@ -96,14 +96,18 @@ jobs:
           path: target/site/jacoco
       #Analyze project with SonarCloud
       #
-      # Importante: NO usar `mvn clean verify` aca. Cada job de GitHub
-      # Actions corre en su propio runner con un target/ vacio, y el
-      # reporte de JaCoCo viene del artifact descargado arriba. Si
-      # corremos `clean`, borramos ese reporte y SonarCloud recibe 0%
-      # coverage. Con `mvn sonar:sonar` (sin clean) SonarCloud lee el
-      # archivo que acabamos de descargar.
+      # Importante:
+      # - NO usar `mvn clean` aca: borra el artifact de JaCoCo que
+      #   acabamos de descargar arriba y SonarCloud reportaria 0% coverage.
+      # - NO usar `mvn verify`: volveria a correr los 416 tests (ya los
+      #   corrio el job `tests`). Con `compile test-compile` es
+      #   suficiente: genera los .class que SonarCloud necesita para
+      #   hacer el analisis de bytecode, sin re-ejecutar tests.
+      # - El `clean` tampoco es necesario porque cada job arranca con
+      #   un target/ limpio (los artifacts descargados se ubicaron en
+      #   target/site/jacoco, no en el resto del tree).
       - name: Analyze with SonarCloud
-        run: mvn -B sonar:sonar -Dsonar.projectKey=Isa-Bedoya-UdeA_Lectuaria-backend -Dsonar.organization=isa-bedoya-udea -Dsonar.host.url=https://sonarcloud.io -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml -Dsonar.token=$SONAR_TOKEN -Dsonar.automatic=false
+        run: mvn -B compile test-compile sonar:sonar -Dsonar.projectKey=Isa-Bedoya-UdeA_Lectuaria-backend -Dsonar.organization=isa-bedoya-udea -Dsonar.host.url=https://sonarcloud.io -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml -Dsonar.token=$SONAR_TOKEN -Dsonar.automatic=false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

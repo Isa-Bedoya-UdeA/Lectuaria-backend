@@ -48,13 +48,6 @@ pom.xml.next
 release.properties
 dependency-reduced-pom.xml
 .flattened-pom.xml
-%regex[(?i)(.*/)??SCCS(/.*)?]
-%regex[(?i)(.*/)??RCS(/.*)?]
-%regex[(?i)(.*/)??CVS(/.*)?]
-%regex[(?i)(.*/)??CVSROOT(/.*)?]
-%regex[(?i)(.*/)??\.svn(/.*)?]
-%regex[(?i)(.*/)??\.hg(/.*)?]
-%regex[(?i)(.*/)??\.bzr(/.*)?]
 
 # Others
 *.orig
