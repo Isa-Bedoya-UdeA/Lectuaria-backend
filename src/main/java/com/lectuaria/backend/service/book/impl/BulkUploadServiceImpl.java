@@ -9,11 +9,11 @@ import com.lectuaria.backend.repository.book.CsvUploadErrorRepository;
 import com.lectuaria.backend.repository.book.CsvUploadRepository;
 import com.lectuaria.backend.service.book.IBulkUploadService;
 import com.lectuaria.backend.service.book.IBookPublishService;
+import com.lectuaria.backend.util.EncodingHelper;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.BufferedReader;
-import java.io.InputStreamReader;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -61,7 +61,7 @@ public class BulkUploadServiceImpl implements IBulkUploadService {
         int successfulRecords = 0;
         int failedRecords = 0;
 
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream()))) {
+        try (BufferedReader reader = EncodingHelper.newCsvReader(file.getInputStream())) {
             String lineContent;
             int rowIndex = 1;
 
