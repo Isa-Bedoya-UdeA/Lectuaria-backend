@@ -15,22 +15,36 @@ Backend REST de **Lectuaria**, plataforma web orientada al fomento de la lectura
 
 ## Tabla de contenidos
 
-1. [Descripción del proyecto](#descripción-del-proyecto)
-2. [Stack tecnológico](#stack-tecnológico)
-3. [Arquitectura en 5 capas](#arquitectura-en-5-capas)
-4. [Variables de entorno requeridas](#variables-de-entorno-requeridas)
-5. [Clonación e instalación local](#clonación-e-instalación-local)
-6. [Ejecución de la aplicación](#ejecución-de-la-aplicación)
-7. [Testing](#testing)
-8. [Documentación de la API (Swagger)](#documentación-de-la-api-swagger)
-9. [Estructura del proyecto](#estructura-del-proyecto)
-10. [Patrones de diseño aplicados](#patrones-de-diseño-aplicados)
-11. [HATEOAS](#hateoas)
-12. [Decisiones de seguridad](#decisiones-de-seguridad)
-13. [Endpoints principales](#endpoints-principales)
-14. [CI/CD](#cicd)
-15. [Migraciones y base de datos](#migraciones-y-base-de-datos)
-16. [Licencia](#licencia)
+- [Lectuaria Backend](#lectuaria-backend)
+  - [Tabla de contenidos](#tabla-de-contenidos)
+  - [Descripción del proyecto](#descripción-del-proyecto)
+  - [Stack tecnológico](#stack-tecnológico)
+  - [Arquitectura en 5 capas](#arquitectura-en-5-capas)
+    - [Descripción de las capas](#descripción-de-las-capas)
+  - [Variables de entorno requeridas](#variables-de-entorno-requeridas)
+    - [Base de datos (Supabase PostgreSQL)](#base-de-datos-supabase-postgresql)
+    - [JWT](#jwt)
+    - [Almacenamiento de portadas (Supabase Storage S3-compatible)](#almacenamiento-de-portadas-supabase-storage-s3-compatible)
+    - [Frontend y email](#frontend-y-email)
+  - [Clonación e instalación local](#clonación-e-instalación-local)
+    - [Requisitos](#requisitos)
+  - [Ejecución de la aplicación](#ejecución-de-la-aplicación)
+    - [Perfiles disponibles](#perfiles-disponibles)
+  - [Testing](#testing)
+  - [Documentación de la API (Swagger)](#documentación-de-la-api-swagger)
+  - [Estructura del proyecto](#estructura-del-proyecto)
+  - [Patrones de diseño aplicados](#patrones-de-diseño-aplicados)
+    - [Jerarquía de excepciones](#jerarquía-de-excepciones)
+  - [HATEOAS](#hateoas)
+    - [Estructura de respuesta típica](#estructura-de-respuesta-típica)
+    - [Cobertura](#cobertura)
+    - [Helper central](#helper-central)
+  - [Decisiones de seguridad](#decisiones-de-seguridad)
+    - [Reglas clave de `SecurityConfig`](#reglas-clave-de-securityconfig)
+  - [Endpoints principales](#endpoints-principales)
+  - [CI/CD](#cicd)
+  - [Migraciones y base de datos](#migraciones-y-base-de-datos)
+  - [Licencia](#licencia)
 
 ---
 
@@ -255,11 +269,16 @@ mvn clean test jacoco:report
 # Reporte en: target/site/jacoco/index.html
 ```
 
-El proyecto cuenta con **396 tests** (254 unitarios + 151 de integración) que cubren:
-- Capa de servicios (Book, Auth, Notification, User, Library, Friendship, etc.)
-- Capa de controllers con MockMvc
+El proyecto cuenta con **422 tests** (266 unitarios + 156 de integración), todos pasando, que cubren:
+- Capa de servicios (Book, Auth, Notification, User, Library, Friendship, etc.) — tests unitarios con Mockito
+- Capa de controllers con MockMvc + `@SpringBootTest` — tests de integración
 - Validación de seguridad JWT y autorización por rol
 - Respuestas HATEOAS (`EntityModel`, `CollectionModel`, `PagedModel`)
+
+Desglose verificado a partir de `target/surefire-reports/TEST-*.xml`:
+- 156 tests de integración (paquete `controller/`)
+- 260 tests unitarios de services (paquete `service/.../impl/`)
+- 6 tests unitarios de utilidades (`EncodingHelperTest`)
 
 ---
 
@@ -281,8 +300,7 @@ La documentación se genera automáticamente a partir de los controllers y DTOs;
 ```
 lectuaria-backend/
 ├── docs/
-│   ├── arquitectura-5-capas.png           # Diagrama de arquitectura
-│   └── sprint-*.md
+│   └── arquitectura-5-capas.png           # Diagrama de arquitectura
 ├── src/
 │   ├── main/
 │   │   ├── java/com/lectuaria/backend/
